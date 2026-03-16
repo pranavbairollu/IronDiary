@@ -218,8 +218,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addStudySession(subject: String, duration: Float) {
+        val trimmedSubject = subject.trim()
+        if (trimmedSubject.isEmpty()) {
+            _saveStatus.value = Resource.Error("Subject cannot be empty.")
+            return
+        }
+        if (duration <= 0f || duration > 24f) {
+            _saveStatus.value = Resource.Error("Duration must be between 0 and 24 hours.")
+            return
+        }
+
         _saveStatus.value = Resource.Loading
-        val session = StudySession(subject = subject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
+        val session = StudySession(subject = trimmedSubject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
         getStudySessionsCollection()?.add(session)
             ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
@@ -230,8 +240,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addTask(description: String) {
+        val trimmedDesc = description.trim()
+        if (trimmedDesc.isEmpty()) {
+            _saveStatus.value = Resource.Error("Task description cannot be empty.")
+            return
+        }
+        if (trimmedDesc.length > 500) {
+            _saveStatus.value = Resource.Error("Task description is too long.")
+            return
+        }
+
         _saveStatus.value = Resource.Loading
-        val task = Task(description = description, createdDate = com.google.firebase.Timestamp(Date()))
+        val task = Task(description = trimmedDesc, createdDate = com.google.firebase.Timestamp(Date()))
         getTasksCollection()?.add(task)
             ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)

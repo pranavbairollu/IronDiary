@@ -68,11 +68,7 @@ fun CalendarScreen() {
         mainViewModel.fetchDailyLogs()
     }
 
-    LaunchedEffect(saveStatus) {
-        if (saveStatus is Resource.Success || saveStatus is Resource.Error) {
-            mainViewModel.resetSaveStatus()
-        }
-    }
+
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var showBottomSheet by remember { mutableStateOf(false) }

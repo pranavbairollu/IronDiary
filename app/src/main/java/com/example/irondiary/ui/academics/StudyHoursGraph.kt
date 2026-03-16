@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -120,7 +122,7 @@ private fun TasksForDayDialog(date: LocalDate, tasks: List<Task>, onDismiss: () 
         title = { Text(text = "Completed Tasks for ${date.format(DateTimeFormatter.ofPattern("MMM d"))}") },
         text = {
             if (tasks.isNotEmpty()) {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     tasks.forEach { task ->
                         Text(task.description)
                     }

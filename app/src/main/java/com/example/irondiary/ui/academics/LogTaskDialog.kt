@@ -22,6 +22,8 @@ fun LogTaskDialog(
     onConfirm: (String) -> Unit
 ) {
     var description by remember { mutableStateOf("") }
+    val trimmedDesc = description.trim()
+    val isDescValid = trimmedDesc.isNotEmpty() && trimmedDesc.length <= 500
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -32,14 +34,20 @@ fun LogTaskDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Task description") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    isError = trimmedDesc.length > 500,
+                    supportingText = {
+                        if (trimmedDesc.length > 500) {
+                            Text("Description is too long (max 500 chars)")
+                        }
+                    }
                 )
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(description) },
-                enabled = description.isNotBlank()
+                onClick = { onConfirm(trimmedDesc) },
+                enabled = isDescValid
             ) {
                 Text("Log")
             }

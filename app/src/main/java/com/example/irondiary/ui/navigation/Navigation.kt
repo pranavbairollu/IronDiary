@@ -1,6 +1,7 @@
 package com.example.irondiary.ui.navigation
 
 import android.app.Application
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.irondiary.data.Resource
 import com.example.irondiary.ui.academics.AcademicsScreen
 import com.example.irondiary.ui.academics.LogStudySessionDialog
 import com.example.irondiary.ui.academics.LogTaskDialog
@@ -83,6 +85,17 @@ fun TopLevelNav() {
     val coroutineScope = rememberCoroutineScope()
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(saveStatus) {
+        if (saveStatus is Resource.Error) {
+            Toast.makeText(context, (saveStatus as Resource.Error).message ?: "Error saving", Toast.LENGTH_LONG).show()
+            mainViewModel.resetSaveStatus()
+        } else if (saveStatus is Resource.Success) {
+            mainViewModel.resetSaveStatus()
+        }
+    }
 
     if (showLogChoiceDialog) {
         AlertDialog(

@@ -25,7 +25,14 @@ fun LogStudySessionDialog(
 ) {
     var subject by remember { mutableStateOf("") }
     var duration by remember { mutableStateOf("") }
-    val isDurationError = remember(duration) { duration.toFloatOrNull() == null && duration.isNotEmpty() }
+    val isDurationInvalid = remember(duration) { 
+        if (duration.isEmpty()) false 
+        else {
+            val d = duration.toFloatOrNull()
+            d == null || d <= 0f || d > 24f
+        }
+    }
+    val isSubjectValid = subject.trim().isNotEmpty()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -43,8 +50,8 @@ fun LogStudySessionDialog(
                     onValueChange = { duration = it },
                     label = { Text("Duration (hours)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = isDurationError,
-                    supportingText = { if (isDurationError) Text("Please enter a valid number") }
+                    isError = isDurationInvalid,
+                    supportingText = { if (isDurationInvalid) Text("Must be between 0 and 24") }
                 )
             }
         },
@@ -52,10 +59,10 @@ fun LogStudySessionDialog(
             Button(
                 onClick = { 
                     duration.toFloatOrNull()?.let {
-                        onConfirm(subject, it)
+                        onConfirm(subject.trim(), it)
                     }
                 },
-                enabled = subject.isNotBlank() && duration.toFloatOrNull() != null && (duration.toFloatOrNull() ?: 0f) > 0f
+                enabled = isSubjectValid && !isDurationInvalid && duration.isNotEmpty()
             ) {
                 Text("Log")
             }
