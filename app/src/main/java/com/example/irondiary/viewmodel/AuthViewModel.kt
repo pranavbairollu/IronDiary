@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.FirebaseNetworkException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +35,10 @@ class AuthViewModel : ViewModel() {
     }
 
     fun sendPasswordResetEmail(email: String) {
+        if (email.isBlank()) {
+            _uiState.value = AuthUiState.Error("Email cannot be empty.")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
@@ -40,6 +46,8 @@ class AuthViewModel : ViewModel() {
                 _uiState.value = AuthUiState.PasswordResetEmailSent
             } catch (e: FirebaseAuthException) {
                 _uiState.value = AuthUiState.Error(mapFirebaseError(e))
+            } catch (e: FirebaseNetworkException) {
+                _uiState.value = AuthUiState.Error("No internet connection.")
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Error("An unexpected error occurred: ${e.message}")
             }
@@ -47,6 +55,10 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signIn(email: String, password: String) {
+        if (email.isBlank() || password.isBlank()) {
+            _uiState.value = AuthUiState.Error("Email and password cannot be empty.")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
@@ -56,6 +68,10 @@ class AuthViewModel : ViewModel() {
                 }
             } catch (e: FirebaseAuthException) {
                 _uiState.value = AuthUiState.Error(mapFirebaseError(e))
+            } catch (e: FirebaseAuthInvalidCredentialsException) {
+                _uiState.value = AuthUiState.Error("Invalid credentials.")
+            } catch (e: FirebaseNetworkException) {
+                _uiState.value = AuthUiState.Error("No internet connection.")
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Error("An unexpected error occurred: ${e.message}")
             }
@@ -63,6 +79,10 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signUp(email: String, password: String) {
+        if (email.isBlank() || password.isBlank()) {
+            _uiState.value = AuthUiState.Error("Email and password cannot be empty.")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
@@ -72,6 +92,8 @@ class AuthViewModel : ViewModel() {
                 }
             } catch (e: FirebaseAuthException) {
                 _uiState.value = AuthUiState.Error(mapFirebaseError(e))
+            } catch (e: FirebaseNetworkException) {
+                _uiState.value = AuthUiState.Error("No internet connection.")
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Error("An unexpected error occurred: ${e.message}")
             }

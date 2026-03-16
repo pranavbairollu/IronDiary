@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.irondiary.viewmodel.AuthViewModel
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 
@@ -43,6 +46,7 @@ fun AcademicsScreen() {
 
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
+    val authViewModel: AuthViewModel = viewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -67,15 +71,27 @@ fun AcademicsScreen() {
     ) {
         item {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Default.School,
-                    contentDescription = "Academics Icon",
-                    modifier = Modifier.size(32.dp)
-                )
-                Text("Academics", style = MaterialTheme.typography.headlineLarge)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "Academics Icon",
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text("Academics", style = MaterialTheme.typography.headlineLarge)
+                }
+                IconButton(onClick = { authViewModel.signOut() }) {
+                    Icon(
+                        imageVector = Icons.Default.Logout,
+                        contentDescription = "Logout"
+                    )
+                }
             }
         }
 

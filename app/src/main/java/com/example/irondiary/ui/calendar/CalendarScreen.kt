@@ -62,9 +62,16 @@ import java.util.Locale
 fun CalendarScreen() {
     val mainViewModel: MainViewModel = viewModel()
     val dailyLogsResource by mainViewModel.dailyLogs.collectAsState()
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
     
     LaunchedEffect(Unit) {
         mainViewModel.fetchDailyLogs()
+    }
+
+    LaunchedEffect(saveStatus) {
+        if (saveStatus is Resource.Success || saveStatus is Resource.Error) {
+            mainViewModel.resetSaveStatus()
+        }
     }
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -219,7 +226,13 @@ fun DailyLogBottomSheet(log: DailyLog, onDismiss: () -> Unit, onSave: (DailyLog)
     var weight by remember(log) { mutableStateOf(log.weight?.toString() ?: "") }
     var notes by remember(log) { mutableStateOf(log.notes ?: "") }
 
-    val isWeightInvalid = remember(weight) { weight.isNotEmpty() && weight.toFloatOrNull() == null }
+    val isWeightInvalid = remember(weight) { 
+        if (weight.isEmpty()) false 
+        else {
+            val w = weight.toFloatOrNull()
+            w == null || w <= 1.0f || w >= 500.0f
+        }
+    }
 
     ModalBottomSheet(sheetState = sheetState, onDismissRequest = onDismiss) {
         Column(
@@ -248,7 +261,7 @@ fun DailyLogBottomSheet(log: DailyLog, onDismiss: () -> Unit, onSave: (DailyLog)
                 isError = isWeightInvalid,
                 supportingText = {
                     if (isWeightInvalid) {
-                        Text("Please enter a valid number")
+                        Text("Weight must be between 1.0 and 500.0 kg")
                     }
                 }
             )

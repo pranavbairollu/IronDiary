@@ -82,8 +82,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 try {
                     snapshot?.let {
-                        val logs = it.documents.associate { doc ->
-                            doc.id to (doc.toObject<DailyLog>() ?: DailyLog(date = doc.id))
+                        val logs = mutableMapOf<String, DailyLog>()
+                        for (doc in it.documents) {
+                            try {
+                                val log = doc.toObject<DailyLog>() ?: DailyLog(date = doc.id)
+                                logs[doc.id] = log
+                            } catch (parseException: Exception) {
+                                android.util.Log.w("MainViewModel", "Failed to parse DailyLog: ${doc.id}", parseException)
+                            }
                         }
                         _dailyLogs.value = Resource.Success(logs)
                     }
@@ -112,7 +118,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     try {
                         snapshot?.let {
-                            val weights = it.toObjects(DailyLog::class.java)
+                            val weights = mutableListOf<DailyLog>()
+                            for (doc in it.documents) {
+                                try {
+                                    val weightLog = doc.toObject(DailyLog::class.java)
+                                    if (weightLog != null) weights.add(weightLog)
+                                } catch (parseException: Exception) {
+                                    android.util.Log.w("MainViewModel", "Failed to parse DailyLog for weight: ${doc.id}", parseException)
+                                }
+                            }
                             _weightData.value = Resource.Success(weights)
                         }
                     } catch (e: Exception) {
@@ -139,7 +153,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 try {
                     snapshot?.let {
-                        val sessions = it.toObjects(StudySession::class.java)
+                        val sessions = mutableListOf<StudySession>()
+                        for (doc in it.documents) {
+                            try {
+                                val session = doc.toObject(StudySession::class.java)
+                                if (session != null) sessions.add(session)
+                            } catch (parseException: Exception) {
+                                android.util.Log.w("MainViewModel", "Failed to parse StudySession: ${doc.id}", parseException)
+                            }
+                        }
                         _studySessions.value = Resource.Success(sessions)
                     }
                 } catch (e: Exception) {
@@ -166,8 +188,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 try {
                     snapshot?.let {
-                        val tasks = it.toObjects(Task::class.java)
-                        _tasks.value = Resource.Success(tasks)
+                        val tasksList = mutableListOf<Task>()
+                        for (doc in it.documents) {
+                            try {
+                                val taskObj = doc.toObject(Task::class.java)
+                                if (taskObj != null) tasksList.add(taskObj)
+                            } catch (parseException: Exception) {
+                                android.util.Log.w("MainViewModel", "Failed to parse Task: ${doc.id}", parseException)
+                            }
+                        }
+                        _tasks.value = Resource.Success(tasksList)
                     }
                 } catch (e: Exception) {
                     _tasks.value = Resource.Error("Error parsing tasks: ${e.message}")
@@ -177,86 +207,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveDailyLog(dateId: String, log: DailyLog) {
-        viewModelScope.launch {
-            _saveStatus.value = Resource.Loading
-            try {
-                getLogsCollection()?.document(dateId)?.set(log)?.await()
+        _saveStatus.value = Resource.Loading
+        getLogsCollection()?.document(dateId)?.set(log)
+            ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
-            } catch (e: Exception) {
+            }
+            ?.addOnFailureListener { e ->
                 _saveStatus.value = Resource.Error("Failed to save log: ${e.message}")
             }
-        }
     }
 
     fun addStudySession(subject: String, duration: Float) {
-        viewModelScope.launch {
-            _saveStatus.value = Resource.Loading
-            try {
-                val session = StudySession(subject = subject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
-                getStudySessionsCollection()?.add(session)?.await()
+        _saveStatus.value = Resource.Loading
+        val session = StudySession(subject = subject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
+        getStudySessionsCollection()?.add(session)
+            ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
-            } catch (e: Exception) {
+            }
+            ?.addOnFailureListener { e ->
                 _saveStatus.value = Resource.Error("Failed to save study session: ${e.message}")
             }
-        }
     }
 
     fun addTask(description: String) {
-        viewModelScope.launch {
-            _saveStatus.value = Resource.Loading
-            try {
-                val task = Task(description = description, createdDate = com.google.firebase.Timestamp(Date()))
-                getTasksCollection()?.add(task)?.await()
+        _saveStatus.value = Resource.Loading
+        val task = Task(description = description, createdDate = com.google.firebase.Timestamp(Date()))
+        getTasksCollection()?.add(task)
+            ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
-            } catch (e: Exception) {
+            }
+            ?.addOnFailureListener { e ->
                 _saveStatus.value = Resource.Error("Failed to save task: ${e.message}")
             }
-        }
     }
 
     fun toggleTaskCompletion(task: Task) {
-        viewModelScope.launch {
-            _saveStatus.value = Resource.Loading
-            try {
-                val newCompletedStatus = !task.completed
-                val update = if (newCompletedStatus) {
-                    mapOf(
-                        "completed" to true,
-                        "completedDate" to com.google.firebase.Timestamp(Date())
-                    )
-                } else {
-                    mapOf(
-                        "completed" to false,
-                        "completedDate" to null
-                    )
-                }
-                getTasksCollection()?.document(task.docId)?.update(update)?.await()
+        _saveStatus.value = Resource.Loading
+        val newCompletedStatus = !task.completed
+        val update = if (newCompletedStatus) {
+            mapOf(
+                "completed" to true,
+                "completedDate" to com.google.firebase.Timestamp(Date())
+            )
+        } else {
+            mapOf(
+                "completed" to false,
+                "completedDate" to null
+            )
+        }
+        getTasksCollection()?.document(task.docId)?.update(update)
+            ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
-            } catch (e: Exception) {
+            }
+            ?.addOnFailureListener { e ->
                 _saveStatus.value = Resource.Error("Failed to update task: ${e.message}")
             }
-        }
     }
 
     fun deleteTask(task: Task) {
-        viewModelScope.launch {
-            _saveStatus.value = Resource.Loading
-            try {
-                getTasksCollection()?.document(task.docId)?.delete()?.await()
+        _saveStatus.value = Resource.Loading
+        getTasksCollection()?.document(task.docId)?.delete()
+            ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
-            } catch (e: Exception) {
+            }
+            ?.addOnFailureListener { e ->
                 _saveStatus.value = Resource.Error("Failed to delete task: ${e.message}")
             }
-        }
     }
 
     fun checkAndResetTasks() {
         val today = LocalDate.now().toString()
-        val lastResetDate = sharedPreferences.getString("lastResetDate", null)
+        val currentUserId = auth.currentUser?.uid ?: return
+        val lastResetDateKey = "lastResetDate_$currentUserId"
+        val lastResetDate = sharedPreferences.getString(lastResetDateKey, null)
 
         if (today != lastResetDate) {
             resetPendingTasks()
-            sharedPreferences.edit().putString("lastResetDate", today).apply()
+            sharedPreferences.edit().putString(lastResetDateKey, today).apply()
         }
     }
 
@@ -265,9 +292,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val tasksCollection = getTasksCollection() ?: return@launch
                 val pendingTasks = tasksCollection.whereEqualTo("completed", false).get().await()
+                
+                val batch = firestore.batch()
                 for (document in pendingTasks.documents) {
-                    document.reference.delete().await()
+                    batch.delete(document.reference)
                 }
+                
+                batch.commit()
+                    .addOnFailureListener { e ->
+                        _saveStatus.value = Resource.Error("Failed to reset pending tasks: ${e.message}")
+                    }
+                    
             } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to reset pending tasks: ${e.message}")
             }
