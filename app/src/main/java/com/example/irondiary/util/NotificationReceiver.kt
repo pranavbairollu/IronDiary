@@ -8,10 +8,19 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.example.irondiary.MainActivity
 import com.example.irondiary.R
+import android.util.Log
 
 class NotificationReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        if (!NotificationHelper.hasNotificationPermission(context)) {
+            Log.w("NotificationReceiver", "Notification permission not granted. Skipping reminder.")
+            return
+        }
+
+        // Ensure channel is created/exists right before posting
+        NotificationHelper.createNotificationChannel(context)
+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val notificationIntent = Intent(context, MainActivity::class.java).apply {
@@ -24,7 +33,7 @@ class NotificationReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with your app icon
             .setContentTitle("Log Your Day")
             .setContentText("Don't forget to log your activities for the day!")
@@ -33,11 +42,9 @@ class NotificationReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
-    }
+        notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
 
-    companion object {
-        const val CHANNEL_ID = "daily_reminder_channel"
-        const val NOTIFICATION_ID = 1
+        // Reschedule the alarm for the next day, crucial for exact alarms that don't repeat automatically
+        NotificationHelper.scheduleDailyReminder(context)
     }
 }
