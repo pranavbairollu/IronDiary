@@ -45,36 +45,52 @@ fun PendingTasksList() {
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val tasksResource by mainViewModel.tasks.collectAsState()
-    var showResetDialog by remember { mutableStateOf(false) }
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    val isLoading = saveStatus is Resource.Loading
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
 
-    if (showResetDialog) {
+    if (showDeleteAllDialog) {
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Reset Pending Tasks?") },
-            text = { Text("Are you sure you want to delete all pending tasks? This action cannot be undone.") },
+            onDismissRequest = { if (!isLoading) showDeleteAllDialog = false },
+            title = { Text("Delete All Tasks?") },
+            text = { Text("This will permanently delete ALL tasks (both pending and completed). This action cannot be undone.") },
             confirmButton = {
-                Button(onClick = { 
-                    mainViewModel.resetPendingTasks()
-                    showResetDialog = false
-                }) {
-                    Text("Reset")
+                Button(
+                    onClick = { mainViewModel.deleteAllTasks() },
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onError)
+                    } else {
+                        Text("Delete All")
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
+                TextButton(onClick = { showDeleteAllDialog = false }, enabled = !isLoading) {
                     Text("Cancel")
                 }
             }
         )
     }
 
+    // Reset dialog state when operation completes successfully
+    LaunchedEffect(saveStatus) {
+        if (saveStatus is Resource.Success) {
+            showDeleteAllDialog = false
+        }
+    }
+
     when (tasksResource) {
         is Resource.Loading -> {
-            CircularProgressIndicator()
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         }
         is Resource.Error -> {
             val errorMessage = (tasksResource as Resource.Error).message
-            Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+            Text(text = errorMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
         }
         is Resource.Success -> {
             val tasks = (tasksResource as Resource.Success).data
@@ -85,8 +101,14 @@ fun PendingTasksList() {
             } else {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button(onClick = { showResetDialog = true }) {
-                            Text("Reset")
+                        Button(
+                            onClick = { showDeleteAllDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                            enabled = !isLoading
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Delete All")
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -95,7 +117,8 @@ fun PendingTasksList() {
                             PendingTaskItem(
                                 task = task, 
                                 onTaskToggled = { mainViewModel.toggleTaskCompletion(it) },
-                                onDeleteTask = { mainViewModel.deleteTask(it) }
+                                onDeleteTask = { mainViewModel.deleteTask(it) },
+                                isInteractionDisabled = isLoading
                             )
                         }
                     }
@@ -129,24 +152,30 @@ private fun EmptyState() {
 }
 
 @Composable
-fun PendingTaskItem(task: Task, onTaskToggled: (Task) -> Unit, onDeleteTask: (Task) -> Unit) {
+fun PendingTaskItem(
+    task: Task, 
+    onTaskToggled: (Task) -> Unit, 
+    onDeleteTask: (Task) -> Unit,
+    isInteractionDisabled: Boolean = false
+) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
+            onDismissRequest = { if (!isInteractionDisabled) showDeleteDialog = false },
             title = { Text("Delete Task?") },
             text = { Text("Are you sure you want to delete this task?") },
             confirmButton = {
-                Button(onClick = { 
-                    onDeleteTask(task)
-                    showDeleteDialog = false 
-                }) {
+                Button(
+                    onClick = { onDeleteTask(task) },
+                    enabled = !isInteractionDisabled,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
                     Text("Delete")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                TextButton(onClick = { showDeleteDialog = false }, enabled = !isInteractionDisabled) {
                     Text("Cancel")
                 }
             }
@@ -162,12 +191,13 @@ fun PendingTaskItem(task: Task, onTaskToggled: (Task) -> Unit, onDeleteTask: (Ta
         ) {
             Checkbox(
                 checked = task.completed,
-                onCheckedChange = { onTaskToggled(task) }
+                onCheckedChange = { onTaskToggled(task) },
+                enabled = !isInteractionDisabled
             )
             Text(text = task.description, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = { showDeleteDialog = true }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete task", tint = MaterialTheme.colorScheme.error)
+            IconButton(onClick = { showDeleteDialog = true }, enabled = !isInteractionDisabled) {
+                Icon(Icons.Filled.Delete, contentDescription = "Delete task", tint = if (isInteractionDisabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)
             }
         }
     }

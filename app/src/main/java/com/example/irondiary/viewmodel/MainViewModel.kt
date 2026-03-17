@@ -262,6 +262,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleTaskCompletion(task: Task) {
+        val docId = task.docId
+        if (docId.isEmpty()) return
+
         _saveStatus.value = Resource.Loading
         val newCompletedStatus = !task.completed
         val update = if (newCompletedStatus) {
@@ -275,7 +278,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 "completedDate" to null
             )
         }
-        getTasksCollection()?.document(task.docId)?.update(update)
+
+        getTasksCollection()?.document(docId)?.update(update)
             ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
             }
@@ -285,8 +289,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteTask(task: Task) {
+        val docId = task.docId
+        if (docId.isEmpty()) return
+
         _saveStatus.value = Resource.Loading
-        getTasksCollection()?.document(task.docId)?.delete()
+        getTasksCollection()?.document(docId)?.delete()
             ?.addOnSuccessListener {
                 _saveStatus.value = Resource.Success(Unit)
             }
@@ -295,38 +302,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun checkAndResetTasks() {
-        val today = LocalDate.now().toString()
-        val currentUserId = auth.currentUser?.uid ?: return
-        val lastResetDateKey = "lastResetDate_$currentUserId"
-        val lastResetDate = sharedPreferences.getString(lastResetDateKey, null)
-
-        if (today != lastResetDate) {
-            resetPendingTasks()
-            sharedPreferences.edit().putString(lastResetDateKey, today).apply()
-        }
-    }
-
-    fun resetPendingTasks() {
-        viewModelScope.launch {
-            try {
-                val tasksCollection = getTasksCollection() ?: return@launch
-                val pendingTasks = tasksCollection.whereEqualTo("completed", false).get().await()
+    fun clearCompletedTasks() {
+        val collection = getTasksCollection() ?: return
+        _saveStatus.value = Resource.Loading
+        
+        collection.whereEqualTo("completed", true).get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.isEmpty) {
+                    _saveStatus.value = Resource.Success(Unit)
+                    return@addOnSuccessListener
+                }
                 
                 val batch = firestore.batch()
-                for (document in pendingTasks.documents) {
-                    batch.delete(document.reference)
+                for (doc in snapshot.documents) {
+                    batch.delete(doc.reference)
                 }
                 
                 batch.commit()
-                    .addOnFailureListener { e ->
-                        _saveStatus.value = Resource.Error("Failed to reset pending tasks: ${e.message}")
-                    }
-                    
-            } catch (e: Exception) {
-                _saveStatus.value = Resource.Error("Failed to reset pending tasks: ${e.message}")
+                    .addOnSuccessListener { _saveStatus.value = Resource.Success(Unit) }
+                    .addOnFailureListener { e -> _saveStatus.value = Resource.Error("Failed to clear completed: ${e.message}") }
             }
-        }
+            .addOnFailureListener { e ->
+                _saveStatus.value = Resource.Error("Failed to fetch completed tasks: ${e.message}")
+            }
+    }
+
+    fun deleteAllTasks() {
+        val collection = getTasksCollection() ?: return
+        _saveStatus.value = Resource.Loading
+        
+        collection.get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.isEmpty) {
+                    _saveStatus.value = Resource.Success(Unit)
+                    return@addOnSuccessListener
+                }
+                
+                val batch = firestore.batch()
+                for (doc in snapshot.documents) {
+                    batch.delete(doc.reference)
+                }
+                
+                batch.commit()
+                    .addOnSuccessListener { _saveStatus.value = Resource.Success(Unit) }
+                    .addOnFailureListener { e -> _saveStatus.value = Resource.Error("Failed to delete all tasks: ${e.message}") }
+            }
+            .addOnFailureListener { e ->
+                _saveStatus.value = Resource.Error("Failed to fetch tasks for deletion: ${e.message}")
+            }
     }
 
 

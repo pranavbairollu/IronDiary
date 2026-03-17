@@ -19,11 +19,13 @@ import androidx.compose.ui.text.input.KeyboardType
 @Composable
 fun LogTaskDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String) -> Unit,
+    isLoading: Boolean = false
 ) {
     var description by remember { mutableStateOf("") }
     val trimmedDesc = description.trim()
-    val isDescValid = trimmedDesc.isNotEmpty() && trimmedDesc.length <= 500
+    val isLengthTooLong = trimmedDesc.length > 500
+    val isDescValid = trimmedDesc.isNotEmpty() && !isLengthTooLong
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -35,25 +37,37 @@ fun LogTaskDialog(
                     onValueChange = { description = it },
                     label = { Text("Task description") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    isError = trimmedDesc.length > 500,
+                    isError = isLengthTooLong,
+                    enabled = !isLoading,
+                    placeholder = { Text("e.g., Complete physics homework") },
                     supportingText = {
-                        if (trimmedDesc.length > 500) {
-                            Text("Description is too long (max 500 chars)")
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            if (isLengthTooLong) {
+                                Text("Description is too long", color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                            Text("${trimmedDesc.length}/500")
                         }
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = { onConfirm(trimmedDesc) },
-                enabled = isDescValid
+                enabled = isDescValid && !isLoading
             ) {
-                Text("Log")
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Log")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
                 Text("Cancel")
             }
         }
