@@ -8,5 +8,6 @@ data class Task(
     val description: String = "",
     val createdDate: Timestamp = Timestamp.now(),
     var completedDate: Timestamp? = null,
-    var completed: Boolean = false
+    var completed: Boolean = false,
+    var updatedAt: Timestamp = Timestamp.now()
 )
