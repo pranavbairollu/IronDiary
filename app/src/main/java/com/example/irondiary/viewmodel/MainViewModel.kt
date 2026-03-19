@@ -1,36 +1,32 @@
 package com.example.irondiary.viewmodel
 
-import android.app.Application
 import android.content.Context
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.Resource
 import com.example.irondiary.data.model.StudySession
 import com.example.irondiary.data.model.Task
+import com.google.firebase.Timestamp
+import com.example.irondiary.data.repository.IronDiaryRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.toObject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.time.LocalDate
 import java.util.Date
-import com.google.firebase.Timestamp
-import kotlinx.coroutines.Job
-import com.example.irondiary.data.repository.IronDiaryRepository
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+/**
+ * The primary ViewModel for managing UI state and business logic in the IronDiary app.
+ *
+ * It acts as a bridge between the [IronDiaryRepository] and the Compose UI,
+ * exposing data as reactive [StateFlow]s and handling user interactions.
+ */
+class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
-    private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    private val sharedPreferences = application.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE)
-    
-    private val repository = IronDiaryRepository(application)
+    private val sharedPreferences = repository.context.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE)
 
     private val _dailyLogs = MutableStateFlow<Resource<Map<String, DailyLog>>>(Resource.Success(emptyMap()))
     val dailyLogs: StateFlow<Resource<Map<String, DailyLog>>> = _dailyLogs.asStateFlow()
@@ -143,7 +139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveDailyLog(log: DailyLog) {
+    fun saveDailyLog(date: String, log: DailyLog) {
         val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
         viewModelScope.launch {
@@ -215,10 +211,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         _saveStatus.value = Resource.Loading
-        val task = Task(description = trimmedDesc, createdDate = com.google.firebase.Timestamp(Date()))
         viewModelScope.launch {
             try {
-                repository.addTask(task, userId)
+                repository.addTask(userId, trimmedDesc)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to save task: ${e.message}")

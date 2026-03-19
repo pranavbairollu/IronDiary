@@ -30,7 +30,8 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun WeightGraphScreen() {
-    val mainViewModel: MainViewModel = viewModel()
+    val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
+    val mainViewModel: MainViewModel = viewModel(factory = com.example.irondiary.viewmodel.MainViewModelFactory(application))
     val weightDataResource by mainViewModel.weightData.collectAsState()
 
     LaunchedEffect(Unit) {

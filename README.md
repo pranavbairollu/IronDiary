@@ -1,37 +1,81 @@
-# IronDiary 🏋️‍♂️📚
+# IronDiary 🛡️
 
-IronDiary is a robust, all-in-one productivity and health tracking Android application designed to help users balance their physical fitness and academic goals. Built with modern Android technologies, it provides a seamless experience for logging gym sessions, tracking study hours, and managing daily tasks.
-
-## 🚀 Features
-
-### 🏋️ Gym & Fitness Tracking
-- **Interactive Calendar**: Visualize your consistency with a color-coded calendar that highlights gym attendance.
-- **Daily Performance Logs**: Record your daily weight and personal notes for every workout session.
-- **Weight Trends**: Track your physical progress over time with a dynamic line graph visualizing your weight history.
-
-### 🎓 Academics & Study Analytics
-- **Study Session Logger**: Log focused study hours by subject to keep a detailed record of your academic effort.
-- **Visual Analytics**: Analyze your productivity with a "Study Hours" bar graph, filterable by Week, Month, or All-time.
-- **Task Management**: A focused to-do list for your daily academic goals.
-- **Automatic Daily Reset**: Start every day with a fresh slate—pending tasks are automatically reset daily to encourage consistent progress.
-
-### ☁️ Secure Cloud Sync
-- **Firebase Integration**: Your data is securely backed up and synced in real-time using Firebase Firestore.
-- **Authentication**: Personalized experience with secure user sign-in and sign-out.
-- **Robustness**: Built-in validation and error handling to ensure your data stays consistent and your experience is error-free.
-
-## 🛠️ Built With
-- **Language**: [Kotlin](https://kotlinlang.org/)
-- **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) (Material 3)
-- **Backend/Database**: [Firebase Auth](https://firebase.google.com/docs/auth) & [Cloud Firestore](https://firebase.google.com/docs/firestore)
-- **Architecture**: MVVM (Model-View-ViewModel)
-- **Local Storage**: SharedPreferences for persistent app states.
-
-## 📦 Getting Started
-1. Clone the repository.
-2. Set up your `google-services.json` in the `app/` directory.
-3. Sync the project with Gradle.
-4. Run the app on an Android device or emulator.
+**IronDiary** is a robust, offline-first productivity and academic tracking Android application. Built with modern Android architecture, it ensures your data is always available, even without an internet connection, while maintaining seamless cloud synchronization.
 
 ---
-*Stay disciplined, track your progress, and crush your goals with IronDiary.*
+
+## 🚀 Key Features
+
+- **✅ Smart Task Management**: Organize your daily goals with instant local feedback and deferred cloud sync.
+- **📅 Interactive Calendar & Daily Logs**: Track gym attendance, weight, and personal notes.
+- **📊 Academic Analytics**: Visualize study patterns with interactive, zoomable bar graphs.
+- **🔄 Bulletproof Sync**: Robust offline-first architecture using Room as the Single Source of Truth (SSOT).
+- **🌓 Modern UI**: Fully responsive Jetpack Compose interface with Material 3 theming and consistent layouts.
+
+---
+
+## 🏗️ Technical Architecture
+
+IronDiary is built on a high-performance, offline-first foundation:
+
+### Modern Android Tech Stack
+- **UI**: Jetpack Compose (Declarative UI)
+- **Database**: Room (Local SSOT)
+- **Networking/Cloud**: Firebase Firestore
+- **Concurrency**: Kotlin Coroutines & Flow
+- **Background Work**: WorkManager (Reliable Sync)
+- **Dependency Management**: Hilt/ViewModel
+
+### Core Architecture (SSOT Pattern)
+```mermaid
+graph TD
+    UI[Jetpack Compose UI] --> VM[MainViewModel]
+    VM --> Repo[IronDiaryRepository]
+    Repo --> Room[Room Database (SSOT)]
+    Room --> Sync[SyncWorker (WorkManager)]
+    Sync <--> Firestore[Firebase Firestore]
+    
+    style Room fill:#f9f,stroke:#333,stroke-width:4px
+```
+
+---
+
+## 🛠️ Portfolio Highlights
+
+### 1. Offline-First Synchronization
+Implementation of a bidirectional sync engine that:
+- Writes to local Room DB instantly for zero-latency UI.
+- Schedules background sync via **WorkManager**.
+- Handles conflicts using a **SyncState State Machine** (Pending, Synced, Failed, Deleted).
+
+### 2. High-Performance UI
+- **Lazy List Optimization**: All lists use stable keys and optimized recomposition triggers.
+- **Custom Graphics**: Custom-built, zoomable bar graphs for academic tracking.
+- **Reactive Data Streams**: End-to-end usage of `Flow` for real-time UI updates from local persistence.
+
+### 3. Unit Testing Excellence
+- Comprehensive test suite using **MockK** and **Coroutines Test**.
+- Isolated repository mocking strategy for robust ViewModel validation.
+
+---
+
+## 📖 Further Documentation
+
+- **[Architecture Deep-Dive](ARCHITECTURE.md)**: Technical details on sync strategy and conflict resolution.
+- **[Setup Guide](SETUP_GUIDE.md)**: Instructions on how to build and run the project locally.
+
+---
+
+## 📷 Screenshots
+
+| Tasks | Calendar | Analytics |
+| :---: | :---: | :---: |
+| ![Tasks](https://via.placeholder.com/200x400?text=Tasks+Screen) | ![Calendar](https://via.placeholder.com/200x400?text=Calendar+Screen) | ![Analytics](https://via.placeholder.com/200x400?text=Analytics+Screen) |
+
+*(Note: Replace placeholders with actual app screenshots for your portfolio)*
+
+---
+
+## 👤 Author
+**Pranav Bairollu**
+- [GitHub](https://github.com/pranavbairollu)

@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,168 +32,107 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.Resource
 import com.example.irondiary.data.model.StudySession
-import com.example.irondiary.data.model.Task
 import com.example.irondiary.ui.components.EmptyState
 import com.example.irondiary.ui.components.LoadingState
 import com.example.irondiary.ui.graph.SimpleBarGraph
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
-import java.time.DayOfWeek
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
+import java.util.*
 
 @Composable
 fun StudyHoursGraph() {
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val studySessionsResource by mainViewModel.studySessions.collectAsState()
-    val tasksResource by mainViewModel.tasks.collectAsState()
-    var selectedFilter by remember { mutableStateOf(FilterType.ALL) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    
+    var selectedFilter by remember { mutableStateOf(StudyFilter.ALL) }
 
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Study Hours", style = MaterialTheme.typography.headlineMedium)
-            FilterButtons(selected = selectedFilter, onFilterSelected = { selectedFilter = it })
-        }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Study Hours",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        FilterButtons(selectedFilter = selectedFilter, onFilterSelected = { selectedFilter = it })
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Box(
             modifier = Modifier.fillMaxWidth().height(300.dp),
             contentAlignment = Alignment.Center
         ) {
-            when (studySessionsResource) {
-                is Resource.Loading -> {
-                    LoadingState()
-                }
-                is Resource.Error -> {
-                    val errorMessage = (studySessionsResource as Resource.Error).message
-                    Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
-                }
-                is Resource.Success -> {
-                    val allSessions = (studySessionsResource as Resource.Success).data
-                    val filteredSessions = remember(allSessions, selectedFilter) {
-                        filterSessions(allSessions, selectedFilter)
-                    }
-
-                    if (filteredSessions.isEmpty()) {
-                        EmptyState(
-                            icon = androidx.compose.material.icons.Icons.Default.School,
-                            title = "Ready to Crush Your Goals?",
-                            subtitle = "Log your study sessions to visualize your progress and build a strong academic foundation."
-                        )
-                    } else {
-                        val data = remember(filteredSessions) {
-                            processSessionsForGraph(filteredSessions)
-                        }
-                        SimpleBarGraph(
-                            modifier = Modifier.fillMaxSize(),
-                            data = data,
-                            barColor = MaterialTheme.colorScheme.tertiary,
-                            onBarClick = { date ->
-                                selectedDate = date
-                            }
-                        )
-                    }
-
-                    selectedDate?.let { date ->
-                        val tasks = (tasksResource as? Resource.Success)?.data ?: emptyList()
-                        val tasksForDate = tasks.filter { task ->
-                            task.completedDate?.let {
-                                val completedDate = Instant.ofEpochSecond(it.seconds).atZone(ZoneId.systemDefault()).toLocalDate()
-                                completedDate == date
-                            } ?: false
-                        }
-                        TasksForDayDialog(date, tasksForDate) {
-                            selectedDate = null
-                        }
-                    }
-                }
+            val sessions = when (val res = studySessionsResource) {
+                is Resource.Success -> res.data
+                else -> emptyList()
             }
-        }
-    }
-}
 
-@Composable
-private fun TasksForDayDialog(date: LocalDate, tasks: List<Task>, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Completed Tasks for ${date.format(DateTimeFormatter.ofPattern("MMM d"))}") },
-        text = {
-            if (tasks.isNotEmpty()) {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    tasks.forEach { task ->
-                        Text(task.description)
-                    }
-                }
+            if (studySessionsResource is Resource.Loading) {
+                LoadingState()
+            } else if (studySessionsResource is Resource.Error) {
+                Text(text = (studySessionsResource as Resource.Error).message, color = MaterialTheme.colorScheme.error)
+            } else if (sessions.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Default.School,
+                    title = "Ready to Crush Your Goals?",
+                    subtitle = "Log your study sessions to visualize your progress and build a strong academic foundation."
+                )
             } else {
-                Text("No completed tasks for this day.")
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+                val data = remember(sessions, selectedFilter) {
+                    processSessionsForGraph(filterSessions(sessions, selectedFilter))
+                }
+                    SimpleBarGraph(
+                        modifier = Modifier.fillMaxSize(),
+                        data = data,
+                        barColor = MaterialTheme.colorScheme.tertiary
+                    )
             }
         }
-    )
+    }
 }
 
+enum class StudyFilter { ALL, LAST_7_DAYS, THIS_MONTH }
 
-// Removed local EmptyState definition as it's now in Common.kt
-
-
-enum class FilterType { WEEK, MONTH, ALL }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterButtons(selected: FilterType, onFilterSelected: (FilterType) -> Unit) {
-    Row {
-        FilterChip(selected = selected == FilterType.WEEK, onClick = { onFilterSelected(FilterType.WEEK) }, label = { Text("Week") })
-        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-        FilterChip(selected = selected == FilterType.MONTH, onClick = { onFilterSelected(FilterType.MONTH) }, label = { Text("Month") })
-        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-        FilterChip(selected = selected == FilterType.ALL, onClick = { onFilterSelected(FilterType.ALL) }, label = { Text("All") })
+private fun FilterButtons(selectedFilter: StudyFilter, onFilterSelected: (StudyFilter) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StudyFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }) }
+            )
+        }
     }
 }
 
-private fun filterSessions(sessions: List<StudySession>, filter: FilterType): List<StudySession> {
-    val now = LocalDate.now()
-    val zoneId = ZoneId.systemDefault()
-
+private fun filterSessions(sessions: List<StudySession>, filter: StudyFilter): List<StudySession> {
+    val now = Calendar.getInstance()
     return when (filter) {
-        FilterType.WEEK -> {
-            val startOfWeek = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay(zoneId).toInstant()
-            val endOfWeek = now.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)).atTime(23, 59, 59).atZone(zoneId).toInstant()
-            sessions.filter { 
-                val sessionInstant = Instant.ofEpochSecond(it.date.seconds)
-                !sessionInstant.isBefore(startOfWeek) && !sessionInstant.isAfter(endOfWeek)
-            }
+        StudyFilter.ALL -> sessions
+        StudyFilter.LAST_7_DAYS -> {
+            val limit = Calendar.getInstance()
+            limit.add(Calendar.DAY_OF_YEAR, -7)
+            sessions.filter { it.date.toDate().after(limit.time) }
         }
-        FilterType.MONTH -> {
-            val startOfMonth = now.withDayOfMonth(1).atStartOfDay(zoneId).toInstant()
-            val endOfMonth = now.with(TemporalAdjusters.lastDayOfMonth()).atTime(23, 59, 59).atZone(zoneId).toInstant()
-            sessions.filter { 
-                val sessionInstant = Instant.ofEpochSecond(it.date.seconds)
-                !sessionInstant.isBefore(startOfMonth) && !sessionInstant.isAfter(endOfMonth)
-            }
+        StudyFilter.THIS_MONTH -> {
+            val limit = Calendar.getInstance()
+            limit.set(Calendar.DAY_OF_MONTH, 1)
+            sessions.filter { it.date.toDate().after(limit.time) }
         }
-        FilterType.ALL -> sessions
     }
 }
 
-private fun processSessionsForGraph(sessions: List<StudySession>): Map<LocalDate, Float> {
-    return sessions
-        .groupBy { 
-            val instant = Instant.ofEpochSecond(it.date.seconds)
-            instant.atZone(ZoneId.systemDefault()).toLocalDate()
-        }
-        .mapValues { (_, sessionsOnDate) -> 
-            sessionsOnDate.sumOf { it.duration.toDouble() }.toFloat()
-        }
+private fun processSessionsForGraph(sessions: List<StudySession>): Map<java.time.LocalDate, Float> {
+    return sessions.groupBy { session ->
+        java.time.Instant.ofEpochSecond(session.date.seconds)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalDate()
+    }.mapValues { (_, sessionsOnDate) ->
+        sessionsOnDate.sumOf { it.duration }.toFloat()
+    }.toSortedMap()
 }

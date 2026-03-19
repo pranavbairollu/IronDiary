@@ -19,12 +19,20 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 /**
- * Executes bidirectional background synchronization of the IronDiary offline databases
- * against the remote Firebase Firestore structure. Handles Conflict Resolution via specific timestamps.
+ * A background worker that synchronizes local Room data with Firebase Firestore.
+ *
+ * The sync process is split into three isolated domains: Tasks, Study Sessions, and Daily Logs.
+ * It uses a timestamp-based conflict resolution strategy (Last Write Wins) with a safe-guard for
+ * newer local changes.
  */
-class SyncWorker(context: Context, workerParams: WorkerParameters) :
-    CoroutineWorker(context, workerParams) {
+class SyncWorker(
+    context: Context,
+    workerParams: WorkerParameters
+) : CoroutineWorker(context, workerParams) {
 
+    /**
+     * Entry point for the work manager. Executes the sync tasks sequentially for all domains.
+     */
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return@withContext Result.failure()
         val db = IronDiaryDatabase.getDatabase(applicationContext)

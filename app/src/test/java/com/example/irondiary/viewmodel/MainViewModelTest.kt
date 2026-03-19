@@ -41,64 +41,36 @@ class MainViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var authMock: FirebaseAuth
-    private lateinit var firestoreMock: FirebaseFirestore
-    private lateinit var applicationMock: Application
-    private lateinit var prefsMock: SharedPreferences
+    private lateinit var applicationMock: android.app.Application
+    private lateinit var repositoryMock: IronDiaryRepository
     private lateinit var viewModel: MainViewModel
-
-    private lateinit var userDocMock: DocumentReference
-    private lateinit var tasksCollectionMock: CollectionReference
-    private lateinit var studyCollectionMock: CollectionReference
-    private lateinit var logsCollectionMock: CollectionReference
 
     @Before
     fun setup() {
         mockkStatic(FirebaseAuth::class)
-        mockkStatic(FirebaseFirestore::class)
 
         authMock = mockk(relaxed = true)
-        firestoreMock = mockk(relaxed = true)
         applicationMock = mockk(relaxed = true)
-        prefsMock = mockk(relaxed = true)
+        repositoryMock = mockk(relaxed = true)
 
         every { FirebaseAuth.getInstance() } returns authMock
-        every { FirebaseFirestore.getInstance() } returns firestoreMock
-        every { applicationMock.getSharedPreferences(any(), any()) } returns prefsMock
-
-        mockkConstructor(IronDiaryRepository::class)
-        coEvery { anyConstructed<IronDiaryRepository>().getTasks(any()) } returns flowOf(emptyList())
-        coEvery { anyConstructed<IronDiaryRepository>().addTask(any(), any()) } returns Unit
-        coEvery { anyConstructed<IronDiaryRepository>().updateTask(any(), any()) } returns Unit
-        coEvery { anyConstructed<IronDiaryRepository>().deleteTask(any(), any()) } returns Unit
         
-        coEvery { anyConstructed<IronDiaryRepository>().getStudySessions(any()) } returns flowOf(emptyList())
-        coEvery { anyConstructed<IronDiaryRepository>().addStudySession(any(), any()) } returns Unit
-        coEvery { anyConstructed<IronDiaryRepository>().deleteStudySession(any(), any()) } returns Unit
+        // Mock Repository flows to return empty states by default
+        coEvery { repositoryMock.getTasks(any()) } returns flowOf(emptyList())
+        coEvery { repositoryMock.getStudySessions(any()) } returns flowOf(emptyList())
+        coEvery { repositoryMock.getDailyLogs(any()) } returns flowOf(emptyMap())
+        coEvery { repositoryMock.getWeightData(any()) } returns flowOf(emptyList())
         
-        coEvery { anyConstructed<IronDiaryRepository>().getDailyLogs(any()) } returns flowOf(emptyMap())
-        coEvery { anyConstructed<IronDiaryRepository>().saveDailyLog(any(), any()) } returns Unit
-        coEvery { anyConstructed<IronDiaryRepository>().getWeightData(any()) } returns flowOf(emptyList())
-        every { anyConstructed<IronDiaryRepository>().enqueueSync() } returns Unit
+        // Match repository context access
+        every { repositoryMock.context } returns applicationMock
+        every { applicationMock.getSharedPreferences(any(), any()) } returns mockk(relaxed = true)
 
         val mockUser = mockk<FirebaseUser>(relaxed = true)
         every { mockUser.uid } returns "test_uid"
         every { authMock.currentUser } returns mockUser
 
-        // Mock Firestore chain: firestore.collection("users").document("test_uid")
-        val rootCollectionMock = mockk<CollectionReference>(relaxed = true)
-        userDocMock = mockk<DocumentReference>(relaxed = true)
-        tasksCollectionMock = mockk<CollectionReference>(relaxed = true)
-        studyCollectionMock = mockk<CollectionReference>(relaxed = true)
-        logsCollectionMock = mockk<CollectionReference>(relaxed = true)
-
-        every { firestoreMock.collection("users") } returns rootCollectionMock
-        every { rootCollectionMock.document("test_uid") } returns userDocMock
-        every { userDocMock.collection("tasks") } returns tasksCollectionMock
-        every { userDocMock.collection("study_sessions") } returns studyCollectionMock
-        every { userDocMock.collection("daily_logs") } returns logsCollectionMock
-
         // Initialize viewModel
-        viewModel = MainViewModel(applicationMock)
+        viewModel = MainViewModel(repositoryMock)
     }
 
     @After
@@ -117,7 +89,7 @@ class MainViewModelTest {
             assertTrue(errorState is Resource.Error)
             assertEquals("Task description cannot be empty.", (errorState as Resource.Error).message)
             
-            verify(exactly = 0) { tasksCollectionMock.add(any()) }
+            verify(exactly = 0) { repositoryMock.addTask(any(), any()) }
         }
     }
 
@@ -133,7 +105,7 @@ class MainViewModelTest {
             assertTrue(errorState is Resource.Error)
             assertEquals("Task description is too long.", (errorState as Resource.Error).message)
             
-            verify(exactly = 0) { tasksCollectionMock.add(any()) }
+            verify(exactly = 0) { repositoryMock.addTask(any(), any()) }
         }
     }
 
@@ -148,7 +120,7 @@ class MainViewModelTest {
             assertEquals(Resource.Success(Unit), awaitItem())
             
             // Verify our repository intercepted the write
-            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().addTask(any(), "test_uid") }
+            coVerify(exactly = 1) { repositoryMock.addTask("Read physics textbook", "test_uid") }
         }
     }
 
@@ -163,7 +135,7 @@ class MainViewModelTest {
             assertTrue(errorState is Resource.Error)
             assertEquals("Subject cannot be empty.", (errorState as Resource.Error).message)
             
-            verify(exactly = 0) { studyCollectionMock.add(any()) }
+            verify(exactly = 0) { repositoryMock.addStudySession(any(), any()) }
         }
     }
 
@@ -182,7 +154,7 @@ class MainViewModelTest {
             viewModel.addStudySession("Math", 25f)
             assertEquals("Duration must be between 0 and 24 hours.", (awaitItem() as Resource.Error).message)
             
-            verify(exactly = 0) { studyCollectionMock.add(any()) }
+            verify(exactly = 0) { repositoryMock.addStudySession(any(), any()) }
         }
     }
 
@@ -196,7 +168,7 @@ class MainViewModelTest {
             assertEquals(Resource.Loading, awaitItem())
             assertEquals(Resource.Success(Unit), awaitItem())
             
-            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().addStudySession(any(), "test_uid") }
+            coVerify(exactly = 1) { repositoryMock.addStudySession("Computer Science", 2.5f, "test_uid") }
         }
     }
 
@@ -206,19 +178,19 @@ class MainViewModelTest {
             assertNull(awaitItem())
             
             val log = com.example.irondiary.data.DailyLog(date = "2024-03-19", attendedGym = true)
-            viewModel.saveDailyLog(log)
+            viewModel.saveDailyLog("2024-03-19", log)
             
             assertEquals(Resource.Loading, awaitItem())
             assertEquals(Resource.Success(Unit), awaitItem())
             
-            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().saveDailyLog(any(), "test_uid") }
+            coVerify(exactly = 1) { repositoryMock.saveDailyLog(any(), "test_uid") }
         }
     }
 
     @Test
     fun saveFailed_networkError_emitsError() = runTest {
         val exception = Exception("Network offline")
-        coEvery { anyConstructed<IronDiaryRepository>().addTask(any(), any()) } throws exception
+        coEvery { repositoryMock.addTask(any(), any()) } throws exception
 
         viewModel.saveStatus.test {
             assertNull(awaitItem())
@@ -246,7 +218,7 @@ class MainViewModelTest {
             assertTrue(errorState is Resource.Error)
             assertEquals("Must be logged in.", (errorState as Resource.Error).message)
             
-            coVerify(exactly = 0) { anyConstructed<IronDiaryRepository>().addTask(any(), any()) }
+            coVerify(exactly = 0) { repositoryMock.addTask(any(), any()) }
         }
     }
 }

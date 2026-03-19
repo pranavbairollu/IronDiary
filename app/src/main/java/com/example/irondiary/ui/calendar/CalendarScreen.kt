@@ -1,18 +1,9 @@
 package com.example.irondiary.ui.calendar
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -20,39 +11,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.Resource
-import com.example.irondiary.ui.components.LoadingState
 import com.example.irondiary.ui.components.SyncIndicator
 import com.example.irondiary.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
-import java.time.DayOfWeek
+import com.example.irondiary.viewmodel.MainViewModelFactory
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -62,146 +35,144 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen() {
-    val mainViewModel: MainViewModel = viewModel()
+    val application = LocalContext.current.applicationContext as Application
+    val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val dailyLogsResource by mainViewModel.dailyLogs.collectAsState()
-    val saveStatus by mainViewModel.saveStatus.collectAsState()
     
-    LaunchedEffect(Unit) {
-        mainViewModel.fetchDailyLogs()
-    }
-
-
-
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var showBottomSheet by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
-    if (showBottomSheet && selectedDate != null) {
-        val dateId = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val log = (dailyLogsResource as? Resource.Success)?.data?.get(dateId) ?: DailyLog(date = dateId)
-
-        DailyLogBottomSheet(
-            log = log,
-            onDismiss = { showBottomSheet = false },
-            onSave = { updatedLog ->
-                mainViewModel.saveDailyLog(dateId, updatedLog)
-                showBottomSheet = false
-            }
-        )
+    val daysInMonth = remember(currentMonth) {
+        val startDay = currentMonth.atDay(1)
+        val endDay = currentMonth.atEndOfMonth()
+        val firstDayOfWeek = startDay.dayOfWeek.value % 7 // 0 for Sunday
+        
+        List(firstDayOfWeek) { null } + (1..endDay.dayOfMonth).map { currentMonth.atDay(it) }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        MonthHeader(currentMonth = currentMonth, onMonthChanged = { currentMonth = it })
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .navigationBarsPadding()
+    ) {
+        CalendarHeader(
+            currentMonth = currentMonth,
+            onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
+            onNextMonth = { currentMonth = currentMonth.plusMonths(1) }
+        )
 
-        Box(modifier = Modifier.weight(1f)) {
-            when (dailyLogsResource) {
-                is Resource.Loading -> {
-                    LoadingState(modifier = Modifier.align(Alignment.Center))
-                }
-                is Resource.Error -> {
-                    val message = (dailyLogsResource as Resource.Error).message
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-                is Resource.Success -> {
-                    val dailyLogs = (dailyLogsResource as Resource.Success).data
-                    CalendarGrid(
-                        currentMonth = currentMonth,
-                        dailyLogs = dailyLogs,
-                        onDateClick = { date ->
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DayLabels()
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(daysInMonth) { date ->
+                if (date != null) {
+                    val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                    val log = when (val res = dailyLogsResource) {
+                        is Resource.Success -> res.data[dateId]
+                        else -> null
+                    }
+                    val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
+
+                    CalendarDay(
+                        date = date,
+                        isSelected = date == selectedDate,
+                        hasLog = log != null,
+                        syncState = syncState,
+                        onDateClick = {
                             selectedDate = date
                             showBottomSheet = true
                         }
                     )
+                } else {
+                    Box(modifier = Modifier.aspectRatio(1f))
                 }
             }
+        }
+
+        if (showBottomSheet && selectedDate != null) {
+            val dateId = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val log = when (val res = dailyLogsResource) {
+                is Resource.Success -> res.data[dateId] ?: DailyLog(date = dateId)
+                else -> DailyLog(date = dateId)
+            }
+
+            DailyLogBottomSheet(
+                log = log,
+                onDismiss = { showBottomSheet = false },
+                onSave = { updatedLog ->
+                    mainViewModel.saveDailyLog(dateId, updatedLog)
+                    showBottomSheet = false
+                }
+            )
         }
     }
 }
 
 @Composable
-fun MonthHeader(currentMonth: YearMonth, onMonthChanged: (YearMonth) -> Unit) {
+fun CalendarHeader(
+    currentMonth: YearMonth,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp, horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = { onMonthChanged(currentMonth.minusMonths(1)) }) {
+        IconButton(onClick = onPreviousMonth) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
         }
         Text(
             text = "${currentMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${currentMonth.year}",
-            style = MaterialTheme.typography.titleLarge
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
         )
-        IconButton(onClick = { onMonthChanged(currentMonth.plusMonths(1)) }) {
+        IconButton(onClick = onNextMonth) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month")
         }
     }
 }
 
 @Composable
-fun CalendarGrid(currentMonth: YearMonth, dailyLogs: Map<String, DailyLog>, onDateClick: (LocalDate) -> Unit) {
-    val daysInMonth = currentMonth.lengthOfMonth()
-    val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek
-    val emptyDays = (firstDayOfMonth.value - DayOfWeek.MONDAY.value + 7) % 7
-
-    val days = (1..daysInMonth).map { currentMonth.atDay(it) }
-    val dayHeaders = DayOfWeek.entries.map { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
-
-    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            dayHeaders.forEach {
-                Text(
-                    text = it,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-        ) {
-            items(count = emptyDays) {
-                Box(Modifier.aspectRatio(1f))
-            }
-            items(days, key = { it.toString() }) { date ->
-                val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val log = dailyLogs[dateId]
-                val attendedGym = log?.attendedGym == true
-
-                DayCell(
-                    date = date,
-                    isGymAttended = attendedGym,
-                    syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED,
-                    onDateClick = { onDateClick(date) }
-                )
-            }
+fun DayLabels() {
+    val days = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    Row(modifier = Modifier.fillMaxWidth()) {
+        days.forEach { day ->
+            Text(
+                text = day,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
     }
 }
 
 @Composable
-fun DayCell(
-    date: LocalDate, 
-    isGymAttended: Boolean, 
+fun CalendarDay(
+    date: LocalDate,
+    isSelected: Boolean,
+    hasLog: Boolean,
     syncState: com.example.irondiary.data.local.SyncState,
     onDateClick: () -> Unit
 ) {
-    val isToday = date == LocalDate.now()
     val backgroundColor = when {
-        isGymAttended -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        isToday -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        hasLog -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
         else -> Color.Transparent
     }
+    
     val textColor = when {
-        isGymAttended -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+        date == LocalDate.now() -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -217,9 +188,10 @@ fun DayCell(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = date.dayOfMonth.toString(),
-                color = textColor
+                color = textColor,
+                fontWeight = if (date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal
             )
-            if (syncState != com.example.irondiary.data.local.SyncState.SYNCED) {
+            if (hasLog && syncState != com.example.irondiary.data.local.SyncState.SYNCED) {
                 Box(
                     modifier = Modifier
                         .size(4.dp)
@@ -231,6 +203,13 @@ fun DayCell(
                                 MaterialTheme.colorScheme.outline
                         )
                 )
+            } else if (hasLog) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
             }
         }
     }
@@ -238,60 +217,42 @@ fun DayCell(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DailyLogBottomSheet(log: DailyLog, onDismiss: () -> Unit, onSave: (DailyLog) -> Unit) {
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
+fun DailyLogBottomSheet(
+    log: DailyLog,
+    onDismiss: () -> Unit,
+    onSave: (DailyLog) -> Unit
+) {
+    var attendedGym by remember { mutableStateOf(log.attendedGym) }
+    var weight by remember { mutableStateOf(log.weight?.toString() ?: "") }
+    var notes by remember { mutableStateOf(log.notes ?: "") }
 
-    var attendedGym by remember(log) { mutableStateOf(log.attendedGym) }
-    var weight by remember(log) { mutableStateOf(log.weight?.toString() ?: "") }
-    var notes by remember(log) { mutableStateOf(log.notes ?: "") }
-
-    val isWeightInvalid = remember(weight) { 
-        if (weight.isEmpty()) false 
-        else {
-            val w = weight.toFloatOrNull()
-            w == null || w <= 1.0f || w >= 500.0f
-        }
-    }
-
-    ModalBottomSheet(sheetState = sheetState, onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState()
+    ) {
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .navigationBarsPadding()
+                .fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Log for ${log.date}",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                SyncIndicator(syncState = log.syncState)
+            Text(
+                text = "Log for ${LocalDate.parse(log.date).format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))}",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = attendedGym, onCheckedChange = { attendedGym = it })
+                Text("Attended Gym")
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Went to Gym", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(checked = attendedGym, onCheckedChange = { attendedGym = it })
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = weight,
                 onValueChange = { weight = it },
                 label = { Text("Weight (kg)") },
-                modifier = Modifier.fillMaxWidth(),
-                isError = isWeightInvalid,
-                supportingText = {
-                    if (isWeightInvalid) {
-                        Text("Weight must be between 1.0 and 500.0 kg")
-                    }
-                }
+                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
@@ -299,22 +260,22 @@ fun DailyLogBottomSheet(log: DailyLog, onDismiss: () -> Unit, onSave: (DailyLog)
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3
             )
+
             Spacer(modifier = Modifier.height(24.dp))
+
             Button(
                 onClick = {
-                    if (!isWeightInvalid) {
-                        onSave(log.copy(attendedGym = attendedGym, weight = weight.toFloatOrNull(), notes = notes))
-                        scope.launch {
-                            sheetState.hide()
-                            onDismiss()
-                        }
-                    }
+                    onSave(log.copy(
+                        attendedGym = attendedGym,
+                        weight = weight.toFloatOrNull(),
+                        notes = notes.takeIf { it.isNotBlank() }
+                    ))
                 },
-                enabled = !isWeightInvalid,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save")
+                Text("Save Log")
             }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
