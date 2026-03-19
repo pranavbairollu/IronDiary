@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.Resource
+import com.example.irondiary.ui.components.LoadingState
+import com.example.irondiary.ui.components.SyncIndicator
 import com.example.irondiary.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -94,7 +96,7 @@ fun CalendarScreen() {
         Box(modifier = Modifier.weight(1f)) {
             when (dailyLogsResource) {
                 is Resource.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    LoadingState(modifier = Modifier.align(Alignment.Center))
                 }
                 is Resource.Error -> {
                     val message = (dailyLogsResource as Resource.Error).message
@@ -169,13 +171,15 @@ fun CalendarGrid(currentMonth: YearMonth, dailyLogs: Map<String, DailyLog>, onDa
             items(count = emptyDays) {
                 Box(Modifier.aspectRatio(1f))
             }
-            items(days) { date ->
+            items(days, key = { it.toString() }) { date ->
                 val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val attendedGym = dailyLogs[dateId]?.attendedGym == true
+                val log = dailyLogs[dateId]
+                val attendedGym = log?.attendedGym == true
 
                 DayCell(
                     date = date,
                     isGymAttended = attendedGym,
+                    syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED,
                     onDateClick = { onDateClick(date) }
                 )
             }
@@ -184,7 +188,12 @@ fun CalendarGrid(currentMonth: YearMonth, dailyLogs: Map<String, DailyLog>, onDa
 }
 
 @Composable
-fun DayCell(date: LocalDate, isGymAttended: Boolean, onDateClick: () -> Unit) {
+fun DayCell(
+    date: LocalDate, 
+    isGymAttended: Boolean, 
+    syncState: com.example.irondiary.data.local.SyncState,
+    onDateClick: () -> Unit
+) {
     val isToday = date == LocalDate.now()
     val backgroundColor = when {
         isGymAttended -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -205,10 +214,25 @@ fun DayCell(date: LocalDate, isGymAttended: Boolean, onDateClick: () -> Unit) {
             .clickable { onDateClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            color = textColor
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = date.dayOfMonth.toString(),
+                color = textColor
+            )
+            if (syncState != com.example.irondiary.data.local.SyncState.SYNCED) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (syncState == com.example.irondiary.data.local.SyncState.FAILED) 
+                                MaterialTheme.colorScheme.error 
+                            else 
+                                MaterialTheme.colorScheme.outline
+                        )
+                )
+            }
+        }
     }
 }
 
@@ -236,11 +260,17 @@ fun DailyLogBottomSheet(log: DailyLog, onDismiss: () -> Unit, onSave: (DailyLog)
                 .padding(16.dp)
                 .navigationBarsPadding()
         ) {
-            Text(
-                text = "Log for ${log.date}",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Log for ${log.date}",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                SyncIndicator(syncState = log.syncState)
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
