@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.Resource
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.ui.components.EmptyState
+import com.example.irondiary.ui.components.LoadingState
+import com.example.irondiary.ui.components.SyncIndicator
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 import java.time.Instant
@@ -96,9 +99,7 @@ fun CompletedTasksList() {
 
     when (tasksResource) {
         is Resource.Loading -> {
-            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            LoadingState()
         }
         is Resource.Error -> {
             val errorMessage = (tasksResource as Resource.Error).message
@@ -108,7 +109,11 @@ fun CompletedTasksList() {
             val tasks = (tasksResource as Resource.Success).data.filter { it.completed }
 
             if (tasks.isEmpty()) {
-                EmptyState()
+                EmptyState(
+                    icon = Icons.Filled.Done,
+                    title = "No tasks completed... yet!",
+                    subtitle = "Log your completed tasks to build momentum and see your progress over time."
+                )
             } else {
                 Column {
                     Row(
@@ -146,28 +151,8 @@ fun CompletedTasksList() {
     }
 }
 
-@Composable
-private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Filled.Done, contentDescription = "", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "No tasks completed... yet!",
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Log your completed tasks to build momentum and see your progress over time.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+// Removed duplicate EmptyState definition as it's now in Common.kt
+
 
 enum class SortOrder { ASCENDING, DESCENDING }
 
@@ -217,12 +202,14 @@ fun GroupedTaskList(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             tasksOnDate.forEach { task ->
-                TaskItem(
-                    task = task, 
-                    onTaskToggled = onTaskToggled, 
-                    onDeleteTask = onDeleteTask,
-                    isInteractionDisabled = isInteractionDisabled
-                )
+                key(task.docId) {
+                    TaskItem(
+                        task = task, 
+                        onTaskToggled = onTaskToggled, 
+                        onDeleteTask = onDeleteTask,
+                        isInteractionDisabled = isInteractionDisabled
+                    )
+                }
             }
         }
     }
@@ -289,6 +276,7 @@ fun TaskItem(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.padding(start = 8.dp).weight(1f)) {
                 Text(text = task.description, style = MaterialTheme.typography.bodyLarge)
+                SyncIndicator(syncState = task.syncState)
                 if (isExpanded) {
                     val completedDate = task.completedDate?.let {
                         Instant.ofEpochSecond(it.seconds)

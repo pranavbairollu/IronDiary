@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.Resource
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.ui.components.EmptyState
+import com.example.irondiary.ui.components.LoadingState
+import com.example.irondiary.ui.components.SyncIndicator
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 
@@ -87,9 +90,7 @@ fun PendingTasksList() {
 
     when (tasksResource) {
         is Resource.Loading -> {
-            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            LoadingState()
         }
         is Resource.Error -> {
             val errorMessage = (tasksResource as Resource.Error).message
@@ -100,7 +101,11 @@ fun PendingTasksList() {
             val pendingTasks = tasks.filter { !it.completed }
 
             if (pendingTasks.isEmpty()) {
-                EmptyState()
+                EmptyState(
+                    icon = Icons.AutoMirrored.Filled.Assignment,
+                    title = "No pending tasks!",
+                    subtitle = "Add a new task to get started."
+                )
             } else {
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -117,12 +122,14 @@ fun PendingTasksList() {
                     Spacer(modifier = Modifier.height(8.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         pendingTasks.forEach { task ->
-                            PendingTaskItem(
-                                task = task, 
-                                onTaskToggled = { mainViewModel.toggleTaskCompletion(it) },
-                                onDeleteTask = { mainViewModel.deleteTask(it) },
-                                isInteractionDisabled = isLoading
-                            )
+                            key(task.docId) {
+                                PendingTaskItem(
+                                    task = task, 
+                                    onTaskToggled = { mainViewModel.toggleTaskCompletion(it) },
+                                    onDeleteTask = { mainViewModel.deleteTask(it) },
+                                    isInteractionDisabled = isLoading
+                                )
+                            }
                         }
                     }
                 }
@@ -131,28 +138,8 @@ fun PendingTasksList() {
     }
 }
 
-@Composable
-private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "No pending tasks!",
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Add a new task to get started.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+// Removed duplicate EmptyState definition as it's now in Common.kt
+
 
 @Composable
 fun PendingTaskItem(
@@ -197,7 +184,10 @@ fun PendingTaskItem(
                 onCheckedChange = { onTaskToggled(task) },
                 enabled = !isInteractionDisabled
             )
-            Text(text = task.description, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = task.description, style = MaterialTheme.typography.bodyLarge)
+                SyncIndicator(syncState = task.syncState)
+            }
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(onClick = { showDeleteDialog = true }, enabled = !isInteractionDisabled) {
                 Icon(Icons.Filled.Delete, contentDescription = "Delete task", tint = if (isInteractionDisabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)
