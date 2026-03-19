@@ -15,11 +15,12 @@ import com.google.firebase.firestore.toObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.util.Date
-
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.Job
 import com.example.irondiary.data.repository.IronDiaryRepository
 
@@ -46,9 +47,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
 
-    private var dailyLogsListener: ListenerRegistration? = null
-    private var weightDataListener: ListenerRegistration? = null
-    private var studySessionsListener: ListenerRegistration? = null
+    private var dailyLogsJob: Job? = null
+    private var weightDataJob: Job? = null
+    private var studySessionsJob: Job? = null
     private var tasksJob: Job? = null
 
     init {
@@ -61,120 +62,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.enqueueSync()
     }
 
-    private fun getLogsCollection() = auth.currentUser?.uid?.let {
-        firestore.collection("users").document(it).collection("daily_logs")
-    }
-
-    private fun getStudySessionsCollection() = auth.currentUser?.uid?.let {
-        firestore.collection("users").document(it).collection("study_sessions")
-    }
-
-    private fun getTasksCollection() = auth.currentUser?.uid?.let {
-        firestore.collection("users").document(it).collection("tasks")
-    }
 
     fun fetchDailyLogs() {
-        viewModelScope.launch {
+        dailyLogsJob?.cancel()
+        dailyLogsJob = viewModelScope.launch {
             _dailyLogs.value = Resource.Loading
-            val collection = getLogsCollection()
-            if (collection == null) {
-                _dailyLogs.value = Resource.Error("You must be logged in to see your data.")
+            val userId = auth.currentUser?.uid
+            if (userId == null) {
+                _dailyLogs.value = Resource.Error("User not logged in.")
                 return@launch
             }
 
-            dailyLogsListener?.remove()
-            dailyLogsListener = collection.addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    _dailyLogs.value = Resource.Error("Failed to fetch logs: ${e.message}")
-                    return@addSnapshotListener
+            try {
+                repository.getDailyLogs(userId).collect { logsMap ->
+                    _dailyLogs.value = Resource.Success(logsMap)
                 }
-                try {
-                    snapshot?.let {
-                        val logs = mutableMapOf<String, DailyLog>()
-                        for (doc in it.documents) {
-                            try {
-                                val log = doc.toObject<DailyLog>() ?: DailyLog(date = doc.id)
-                                logs[doc.id] = log
-                            } catch (parseException: Exception) {
-                                android.util.Log.w("MainViewModel", "Failed to parse DailyLog: ${doc.id}", parseException)
-                            }
-                        }
-                        _dailyLogs.value = Resource.Success(logs)
-                    }
-                } catch (e: Exception) {
-                    _dailyLogs.value = Resource.Error("Error parsing logs: ${e.message}")
-                }
+            } catch (e: Exception) {
+                _dailyLogs.value = Resource.Error("Error loading logs: ${e.message}")
             }
         }
     }
 
     fun fetchWeightData() {
-        viewModelScope.launch {
+        weightDataJob?.cancel()
+        weightDataJob = viewModelScope.launch {
             _weightData.value = Resource.Loading
-            val collection = getLogsCollection()
-            if (collection == null) {
-                _weightData.value = Resource.Error("You must be logged in to see your data.")
+            val userId = auth.currentUser?.uid
+            if (userId == null) {
+                _weightData.value = Resource.Error("User not logged in.")
                 return@launch
             }
 
-            weightDataListener?.remove()
-            weightDataListener = collection.whereGreaterThan("weight", 0).orderBy("date")
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null) {
-                        _weightData.value = Resource.Error("Failed to fetch weight data: ${e.message}")
-                        return@addSnapshotListener
-                    }
-                    try {
-                        snapshot?.let {
-                            val weights = mutableListOf<DailyLog>()
-                            for (doc in it.documents) {
-                                try {
-                                    val weightLog = doc.toObject(DailyLog::class.java)
-                                    if (weightLog != null) weights.add(weightLog)
-                                } catch (parseException: Exception) {
-                                    android.util.Log.w("MainViewModel", "Failed to parse DailyLog for weight: ${doc.id}", parseException)
-                                }
-                            }
-                            _weightData.value = Resource.Success(weights)
-                        }
-                    } catch (e: Exception) {
-                        _weightData.value = Resource.Error("Error parsing weight data: ${e.message}")
-                    }
+            try {
+                repository.getWeightData(userId).collect { data ->
+                    _weightData.value = Resource.Success(data)
                 }
+            } catch (e: Exception) {
+                _weightData.value = Resource.Error("Error loading weight data: ${e.message}")
+            }
         }
     }
 
     fun fetchStudySessions() {
-        viewModelScope.launch {
+        studySessionsJob?.cancel()
+        studySessionsJob = viewModelScope.launch {
             _studySessions.value = Resource.Loading
-            val collection = getStudySessionsCollection()
-            if (collection == null) {
-                _studySessions.value = Resource.Error("You must be logged in to see your data.")
+            val userId = auth.currentUser?.uid
+            if (userId == null) {
+                _studySessions.value = Resource.Error("User not logged in.")
                 return@launch
             }
 
-            studySessionsListener?.remove()
-            studySessionsListener = collection.orderBy("date").addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    _studySessions.value = Resource.Error("Failed to fetch study sessions: ${e.message}")
-                    return@addSnapshotListener
+            try {
+                repository.getStudySessions(userId).collect { sessions ->
+                    _studySessions.value = Resource.Success(sessions)
                 }
-                try {
-                    snapshot?.let {
-                        val sessions = mutableListOf<StudySession>()
-                        for (doc in it.documents) {
-                            try {
-                                val session = doc.toObject(StudySession::class.java)
-                                if (session != null) sessions.add(session)
-                            } catch (parseException: Exception) {
-                                android.util.Log.w("MainViewModel", "Failed to parse StudySession: ${doc.id}", parseException)
-                            }
-                        }
-                        _studySessions.value = Resource.Success(sessions)
-                    }
-                } catch (e: Exception) {
-                    _studySessions.value = Resource.Error("Error parsing study sessions: ${e.message}")
-                }
+            } catch (e: Exception) {
+                _studySessions.value = Resource.Error("Error loading study sessions: ${e.message}")
             }
         }
     }
@@ -199,15 +143,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveDailyLog(dateId: String, log: DailyLog) {
+    fun saveDailyLog(log: DailyLog) {
+        val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
-        getLogsCollection()?.document(dateId)?.set(log)
-            ?.addOnSuccessListener {
+        viewModelScope.launch {
+            try {
+                repository.saveDailyLog(log, userId)
                 _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to save daily log: ${e.message}")
             }
-            ?.addOnFailureListener { e ->
-                _saveStatus.value = Resource.Error("Failed to save log: ${e.message}")
-            }
+        }
     }
 
     fun addStudySession(subject: String, duration: Float) {
@@ -221,15 +167,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
         val session = StudySession(subject = trimmedSubject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
-        getStudySessionsCollection()?.add(session)
-            ?.addOnSuccessListener {
+        
+        viewModelScope.launch {
+            try {
+                repository.addStudySession(session, userId)
                 _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to add study session: ${e.message}")
             }
-            ?.addOnFailureListener { e ->
-                _saveStatus.value = Resource.Error("Failed to save study session: ${e.message}")
+        }
+    }
+
+    fun deleteStudySession(session: StudySession) {
+        val docId = session.docId
+        if (docId.isEmpty()) return
+
+        val userId = auth.currentUser?.uid ?: return
+        _saveStatus.value = Resource.Loading
+        viewModelScope.launch {
+            try {
+                repository.deleteStudySession(docId, userId)
+                _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to delete study session: ${e.message}")
             }
+        }
     }
 
     fun addTask(description: String) {
@@ -340,9 +305,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        dailyLogsListener?.remove()
-        weightDataListener?.remove()
-        studySessionsListener?.remove()
+        dailyLogsJob?.cancel()
+        weightDataJob?.cancel()
+        studySessionsJob?.cancel()
         tasksJob?.cancel()
     }
 }

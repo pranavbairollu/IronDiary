@@ -70,6 +70,15 @@ class MainViewModelTest {
         coEvery { anyConstructed<IronDiaryRepository>().addTask(any(), any()) } returns Unit
         coEvery { anyConstructed<IronDiaryRepository>().updateTask(any(), any()) } returns Unit
         coEvery { anyConstructed<IronDiaryRepository>().deleteTask(any(), any()) } returns Unit
+        
+        coEvery { anyConstructed<IronDiaryRepository>().getStudySessions(any()) } returns flowOf(emptyList())
+        coEvery { anyConstructed<IronDiaryRepository>().addStudySession(any(), any()) } returns Unit
+        coEvery { anyConstructed<IronDiaryRepository>().deleteStudySession(any(), any()) } returns Unit
+        
+        coEvery { anyConstructed<IronDiaryRepository>().getDailyLogs(any()) } returns flowOf(emptyMap())
+        coEvery { anyConstructed<IronDiaryRepository>().saveDailyLog(any(), any()) } returns Unit
+        coEvery { anyConstructed<IronDiaryRepository>().getWeightData(any()) } returns flowOf(emptyList())
+        every { anyConstructed<IronDiaryRepository>().enqueueSync() } returns Unit
 
         val mockUser = mockk<FirebaseUser>(relaxed = true)
         every { mockUser.uid } returns "test_uid"
@@ -179,17 +188,6 @@ class MainViewModelTest {
 
     @Test
     fun addStudySession_validInput_emitsSuccess() = runTest {
-        val mockDocRef = mockk<DocumentReference>(relaxed = true)
-        val mockTask = mockk<Task<DocumentReference>>()
-        
-        every { studyCollectionMock.add(any()) } returns mockTask
-        every { mockTask.addOnSuccessListener(any()) } answers {
-            val listener = arg<OnSuccessListener<DocumentReference>>(0)
-            listener.onSuccess(mockDocRef)
-            mockTask
-        }
-        every { mockTask.addOnFailureListener(any()) } answers { mockTask }
-
         viewModel.saveStatus.test {
             assertNull(awaitItem())
 
@@ -197,6 +195,23 @@ class MainViewModelTest {
 
             assertEquals(Resource.Loading, awaitItem())
             assertEquals(Resource.Success(Unit), awaitItem())
+            
+            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().addStudySession(any(), "test_uid") }
+        }
+    }
+
+    @Test
+    fun saveDailyLog_validInput_emitsSuccess() = runTest {
+        viewModel.saveStatus.test {
+            assertNull(awaitItem())
+            
+            val log = com.example.irondiary.data.DailyLog(date = "2024-03-19", attendedGym = true)
+            viewModel.saveDailyLog(log)
+            
+            assertEquals(Resource.Loading, awaitItem())
+            assertEquals(Resource.Success(Unit), awaitItem())
+            
+            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().saveDailyLog(any(), "test_uid") }
         }
     }
 
