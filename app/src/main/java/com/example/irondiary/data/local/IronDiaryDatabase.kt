@@ -6,13 +6,27 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.irondiary.data.local.dao.TaskDao
+import com.example.irondiary.data.local.dao.StudySessionDao
+import com.example.irondiary.data.local.dao.DailyLogDao
 import com.example.irondiary.data.local.entity.TaskEntity
+import com.example.irondiary.data.local.entity.StudySessionEntity
+import com.example.irondiary.data.local.entity.DailyLogEntity
 
-@Database(entities = [TaskEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        TaskEntity::class, 
+        StudySessionEntity::class, 
+        DailyLogEntity::class
+    ], 
+    version = 1, 
+    exportSchema = false
+)
 @TypeConverters(RoomTypeConverters::class)
 abstract class IronDiaryDatabase : RoomDatabase() {
 
     abstract fun taskDao(): TaskDao
+    abstract fun studySessionDao(): StudySessionDao
+    abstract fun dailyLogDao(): DailyLogDao
 
     companion object {
         @Volatile
