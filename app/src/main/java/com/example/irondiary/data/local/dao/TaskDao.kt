@@ -16,6 +16,9 @@ interface TaskDao : BaseDao<TaskEntity> {
     @Query("SELECT * FROM tasks WHERE userId = :userId AND syncState != 'DELETED' ORDER BY createdDate DESC")
     fun getTasksForUser(userId: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE userId = :userId AND syncState != 'DELETED'")
+    suspend fun getTasksImmediate(userId: String): List<TaskEntity>
+
     /**
      * Gets a specific task by ID. Returns null if not found.
      */

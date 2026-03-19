@@ -76,6 +76,31 @@ class IronDiaryRepository(private val context: Context) {
         }
     }
 
+    suspend fun clearCompletedTasks(userId: String) {
+        val tasks = taskDao.getTasksImmediate(userId).filter { it.completed }
+        if (tasks.isEmpty()) return
+        
+        val deletedEntities = tasks.map {
+            it.copy(syncState = SyncState.DELETED, localUpdatedAt = System.currentTimeMillis())
+        }
+        
+        // Iterative update acts effectively as batch-update thanks to Room transactions
+        deletedEntities.forEach { taskDao.update(it) }
+        enqueueSync()
+    }
+
+    suspend fun deleteAllTasks(userId: String) {
+        val tasks = taskDao.getTasksImmediate(userId)
+        if (tasks.isEmpty()) return
+        
+        val deletedEntities = tasks.map {
+            it.copy(syncState = SyncState.DELETED, localUpdatedAt = System.currentTimeMillis())
+        }
+        
+        deletedEntities.forEach { taskDao.update(it) }
+        enqueueSync()
+    }
+
     /**
      * Triggers WorkManager to sync pending changes to Firebase.
      */
@@ -90,6 +115,7 @@ class IronDiaryRepository(private val context: Context) {
 
         // REPLACE policy ensures rapid successive clicks don't spawn 100 workers, 
         // just restarts the sync timer.
+        android.util.Log.d("IronDiaryRepo", "Enqueuing SyncWorker (ExistingWorkPolicy.REPLACE)")
         WorkManager.getInstance(context).enqueueUniqueWork(
             "IronDiarySyncWork",
             ExistingWorkPolicy.REPLACE,

@@ -15,10 +15,13 @@ import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
+import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.mockkConstructor
 import io.mockk.unmockkAll
 import io.mockk.verify
+import io.mockk.coVerify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -28,6 +31,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import com.example.irondiary.data.repository.IronDiaryRepository
+import kotlinx.coroutines.flow.flowOf
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
@@ -59,6 +64,12 @@ class MainViewModelTest {
         every { FirebaseAuth.getInstance() } returns authMock
         every { FirebaseFirestore.getInstance() } returns firestoreMock
         every { applicationMock.getSharedPreferences(any(), any()) } returns prefsMock
+
+        mockkConstructor(IronDiaryRepository::class)
+        coEvery { anyConstructed<IronDiaryRepository>().getTasks(any()) } returns flowOf(emptyList())
+        coEvery { anyConstructed<IronDiaryRepository>().addTask(any(), any()) } returns Unit
+        coEvery { anyConstructed<IronDiaryRepository>().updateTask(any(), any()) } returns Unit
+        coEvery { anyConstructed<IronDiaryRepository>().deleteTask(any(), any()) } returns Unit
 
         val mockUser = mockk<FirebaseUser>(relaxed = true)
         every { mockUser.uid } returns "test_uid"
@@ -119,17 +130,6 @@ class MainViewModelTest {
 
     @Test
     fun addTask_validInput_emitsSuccess() = runTest {
-        val mockDocRef = mockk<DocumentReference>(relaxed = true)
-        val mockTask = mockk<Task<DocumentReference>>()
-        
-        every { tasksCollectionMock.add(any()) } returns mockTask
-        every { mockTask.addOnSuccessListener(any()) } answers {
-            val listener = arg<OnSuccessListener<DocumentReference>>(0)
-            listener.onSuccess(mockDocRef)
-            mockTask
-        }
-        every { mockTask.addOnFailureListener(any()) } answers { mockTask }
-
         viewModel.saveStatus.test {
             assertNull(awaitItem()) // Initial
 
@@ -137,6 +137,9 @@ class MainViewModelTest {
 
             assertEquals(Resource.Loading, awaitItem())
             assertEquals(Resource.Success(Unit), awaitItem())
+            
+            // Verify our repository intercepted the write
+            coVerify(exactly = 1) { anyConstructed<IronDiaryRepository>().addTask(any(), "test_uid") }
         }
     }
 
@@ -200,15 +203,7 @@ class MainViewModelTest {
     @Test
     fun saveFailed_networkError_emitsError() = runTest {
         val exception = Exception("Network offline")
-        val mockTask = mockk<Task<DocumentReference>>()
-        
-        every { tasksCollectionMock.add(any()) } returns mockTask
-        every { mockTask.addOnSuccessListener(any()) } answers { mockTask }
-        every { mockTask.addOnFailureListener(any()) } answers {
-            val listener = arg<OnFailureListener>(0)
-            listener.onFailure(exception)
-            mockTask
-        }
+        coEvery { anyConstructed<IronDiaryRepository>().addTask(any(), any()) } throws exception
 
         viewModel.saveStatus.test {
             assertNull(awaitItem())
@@ -230,14 +225,13 @@ class MainViewModelTest {
         viewModel.saveStatus.test {
             assertNull(awaitItem())
 
-            // Will attempt to fetch getTasksCollection() which will be null, and fail silently
-            // Currently, MainViewModel does not emit error if collection is null for saves
-            // It just does nothing. To test this accurately:
             viewModel.addTask("Task without user")
 
-            // Wait item might be Loading, then it stops because getTasksCollection() is null
-            assertEquals(Resource.Loading, awaitItem())
-            // It doesn't crash.
+            val errorState = awaitItem()
+            assertTrue(errorState is Resource.Error)
+            assertEquals("Must be logged in.", (errorState as Resource.Error).message)
+            
+            coVerify(exactly = 0) { anyConstructed<IronDiaryRepository>().addTask(any(), any()) }
         }
     }
 }

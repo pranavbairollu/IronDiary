@@ -20,11 +20,16 @@ import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.util.Date
 
+import kotlinx.coroutines.Job
+import com.example.irondiary.data.repository.IronDiaryRepository
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private val sharedPreferences = application.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE)
+    
+    private val repository = IronDiaryRepository(application)
 
     private val _dailyLogs = MutableStateFlow<Resource<Map<String, DailyLog>>>(Resource.Success(emptyMap()))
     val dailyLogs: StateFlow<Resource<Map<String, DailyLog>>> = _dailyLogs.asStateFlow()
@@ -44,13 +49,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var dailyLogsListener: ListenerRegistration? = null
     private var weightDataListener: ListenerRegistration? = null
     private var studySessionsListener: ListenerRegistration? = null
-    private var tasksListener: ListenerRegistration? = null
+    private var tasksJob: Job? = null
 
     init {
         fetchDailyLogs()
         fetchWeightData()
         fetchStudySessions()
         fetchTasks()
+        
+        // Trigger background sync on app startup (Safeguard #4)
+        repository.enqueueSync()
     }
 
     private fun getLogsCollection() = auth.currentUser?.uid?.let {
@@ -172,36 +180,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchTasks() {
-        viewModelScope.launch {
+        tasksJob?.cancel()
+        tasksJob = viewModelScope.launch {
             _tasks.value = Resource.Loading
-            val collection = getTasksCollection()
-            if (collection == null) {
+            val userId = auth.currentUser?.uid
+            if (userId == null) {
                 _tasks.value = Resource.Error("You must be logged in to see your data.")
                 return@launch
             }
 
-            tasksListener?.remove()
-            tasksListener = collection.orderBy("createdDate").addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    _tasks.value = Resource.Error("Failed to fetch tasks: ${e.message}")
-                    return@addSnapshotListener
+            try {
+                repository.getTasks(userId).collect { taskList ->
+                    _tasks.value = Resource.Success(taskList)
                 }
-                try {
-                    snapshot?.let {
-                        val tasksList = mutableListOf<Task>()
-                        for (doc in it.documents) {
-                            try {
-                                val taskObj = doc.toObject(Task::class.java)
-                                if (taskObj != null) tasksList.add(taskObj)
-                            } catch (parseException: Exception) {
-                                android.util.Log.w("MainViewModel", "Failed to parse Task: ${doc.id}", parseException)
-                            }
-                        }
-                        _tasks.value = Resource.Success(tasksList)
-                    }
-                } catch (e: Exception) {
-                    _tasks.value = Resource.Error("Error parsing tasks: ${e.message}")
-                }
+            } catch (e: Exception) {
+                _tasks.value = Resource.Error("Error loading tasks: ${e.message}")
             }
         }
     }
@@ -250,106 +243,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            _saveStatus.value = Resource.Error("Must be logged in.")
+            return
+        }
+
         _saveStatus.value = Resource.Loading
         val task = Task(description = trimmedDesc, createdDate = com.google.firebase.Timestamp(Date()))
-        getTasksCollection()?.add(task)
-            ?.addOnSuccessListener {
+        viewModelScope.launch {
+            try {
+                repository.addTask(task, userId)
                 _saveStatus.value = Resource.Success(Unit)
-            }
-            ?.addOnFailureListener { e ->
+            } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to save task: ${e.message}")
             }
+        }
     }
 
     fun toggleTaskCompletion(task: Task) {
         val docId = task.docId
         if (docId.isEmpty()) return
 
-        _saveStatus.value = Resource.Loading
-        val newCompletedStatus = !task.completed
-        val update = if (newCompletedStatus) {
-            mapOf(
-                "completed" to true,
-                "completedDate" to com.google.firebase.Timestamp(Date())
-            )
-        } else {
-            mapOf(
-                "completed" to false,
-                "completedDate" to null
-            )
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            _saveStatus.value = Resource.Error("Must be logged in.")
+            return
         }
 
-        getTasksCollection()?.document(docId)?.update(update)
-            ?.addOnSuccessListener {
+        _saveStatus.value = Resource.Loading
+        val newCompletedStatus = !task.completed
+        val updatedTask = task.copy(
+            completed = newCompletedStatus,
+            completedDate = if (newCompletedStatus) com.google.firebase.Timestamp.now() else null
+        )
+
+        viewModelScope.launch {
+            try {
+                repository.updateTask(updatedTask, userId)
                 _saveStatus.value = Resource.Success(Unit)
-            }
-            ?.addOnFailureListener { e ->
+            } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to update task: ${e.message}")
             }
+        }
     }
 
     fun deleteTask(task: Task) {
         val docId = task.docId
         if (docId.isEmpty()) return
 
+        val userId = auth.currentUser?.uid ?: return
+
         _saveStatus.value = Resource.Loading
-        getTasksCollection()?.document(docId)?.delete()
-            ?.addOnSuccessListener {
+        viewModelScope.launch {
+            try {
+                repository.deleteTask(docId, userId)
                 _saveStatus.value = Resource.Success(Unit)
-            }
-            ?.addOnFailureListener { e ->
+            } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to delete task: ${e.message}")
             }
+        }
     }
 
     fun clearCompletedTasks() {
-        val collection = getTasksCollection() ?: return
+        val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
         
-        collection.whereEqualTo("completed", true).get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.isEmpty) {
-                    _saveStatus.value = Resource.Success(Unit)
-                    return@addOnSuccessListener
-                }
-                
-                val batch = firestore.batch()
-                for (doc in snapshot.documents) {
-                    batch.delete(doc.reference)
-                }
-                
-                batch.commit()
-                    .addOnSuccessListener { _saveStatus.value = Resource.Success(Unit) }
-                    .addOnFailureListener { e -> _saveStatus.value = Resource.Error("Failed to clear completed: ${e.message}") }
+        viewModelScope.launch {
+            try {
+                repository.clearCompletedTasks(userId)
+                _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to clear completed: ${e.message}")
             }
-            .addOnFailureListener { e ->
-                _saveStatus.value = Resource.Error("Failed to fetch completed tasks: ${e.message}")
-            }
+        }
     }
 
     fun deleteAllTasks() {
-        val collection = getTasksCollection() ?: return
+        val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
         
-        collection.get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.isEmpty) {
-                    _saveStatus.value = Resource.Success(Unit)
-                    return@addOnSuccessListener
-                }
-                
-                val batch = firestore.batch()
-                for (doc in snapshot.documents) {
-                    batch.delete(doc.reference)
-                }
-                
-                batch.commit()
-                    .addOnSuccessListener { _saveStatus.value = Resource.Success(Unit) }
-                    .addOnFailureListener { e -> _saveStatus.value = Resource.Error("Failed to delete all tasks: ${e.message}") }
+        viewModelScope.launch {
+            try {
+                repository.deleteAllTasks(userId)
+                _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to delete all tasks: ${e.message}")
             }
-            .addOnFailureListener { e ->
-                _saveStatus.value = Resource.Error("Failed to fetch tasks for deletion: ${e.message}")
-            }
+        }
     }
 
 
@@ -362,6 +343,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dailyLogsListener?.remove()
         weightDataListener?.remove()
         studySessionsListener?.remove()
-        tasksListener?.remove()
+        tasksJob?.cancel()
     }
 }
