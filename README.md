@@ -29,11 +29,11 @@ IronDiary is built on a high-performance, offline-first foundation:
 ### Core Architecture (SSOT Pattern)
 ```mermaid
 graph TD
-    UI[Jetpack Compose UI] --> VM[MainViewModel]
-    VM --> Repo[IronDiaryRepository]
-    Repo --> Room[Room Database (SSOT)]
-    Room --> Sync[SyncWorker (WorkManager)]
-    Sync <--> Firestore[Firebase Firestore]
+    UI["Jetpack Compose UI"] --> VM["MainViewModel"]
+    VM --> Repo["IronDiaryRepository"]
+    Repo --> Room["Room Database (SSOT)"]
+    Room --> Sync["SyncWorker (WorkManager)"]
+    Sync <--> Firestore["Firebase Firestore"]
     
     style Room fill:#f9f,stroke:#333,stroke-width:4px
 ```
@@ -66,15 +66,6 @@ Implementation of a bidirectional sync engine that:
 
 ---
 
-## 📷 Screenshots
-
-| Tasks | Calendar | Analytics |
-| :---: | :---: | :---: |
-| ![Tasks](https://via.placeholder.com/200x400?text=Tasks+Screen) | ![Calendar](https://via.placeholder.com/200x400?text=Calendar+Screen) | ![Analytics](https://via.placeholder.com/200x400?text=Analytics+Screen) |
-
-*(Note: Replace placeholders with actual app screenshots for your portfolio)*
-
----
 
 ## 👤 Author
 **Pranav Bairollu**
