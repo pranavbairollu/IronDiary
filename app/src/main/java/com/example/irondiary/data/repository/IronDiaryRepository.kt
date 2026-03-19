@@ -11,6 +11,8 @@ import com.example.irondiary.data.local.SyncState
 import com.example.irondiary.data.local.mapper.toDomainModel
 import com.example.irondiary.data.local.mapper.toEntity
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.data.model.StudySession
+import com.example.irondiary.data.DailyLog
 import com.example.irondiary.worker.SyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,6 +27,8 @@ class IronDiaryRepository(private val context: Context) {
 
     private val db = IronDiaryDatabase.getDatabase(context)
     private val taskDao = db.taskDao()
+    private val studyDao = db.studySessionDao()
+    private val logDao = db.dailyLogDao()
 
     // --------------------------------------------------------
     // TASKS
@@ -100,6 +104,62 @@ class IronDiaryRepository(private val context: Context) {
         deletedEntities.forEach { taskDao.update(it) }
         enqueueSync()
     }
+
+    // --------------------------------------------------------
+    // STUDY SESSIONS
+    // --------------------------------------------------------
+
+    fun getStudySessions(userId: String): Flow<List<StudySession>> {
+        return studyDao.getSessionsForUser(userId).map { entities ->
+            entities.map { it.toDomainModel() }
+        }
+    }
+
+    suspend fun addStudySession(session: StudySession, userId: String) {
+        val docId = if (session.docId.isBlank()) UUID.randomUUID().toString() else session.docId
+        val sessionWithId = session.copy(
+            docId = docId,
+            updatedAt = Timestamp.now()
+        )
+        studyDao.insert(sessionWithId.toEntity(userId, SyncState.PENDING))
+        enqueueSync()
+    }
+
+    suspend fun deleteStudySession(docId: String, userId: String) {
+        val existing = studyDao.getSessionById(docId, userId)
+        existing?.let {
+            studyDao.update(it.copy(syncState = SyncState.DELETED, localUpdatedAt = System.currentTimeMillis()))
+            enqueueSync()
+        }
+    }
+
+    // --------------------------------------------------------
+    // DAILY LOGS
+    // --------------------------------------------------------
+
+    fun getDailyLogs(userId: String): Flow<Map<String, DailyLog>> {
+        return logDao.getAllLogs(userId).map { entities ->
+            entities.associate { it.date to it.toDomainModel() }
+        }
+    }
+
+    fun getDailyLogForDate(date: String, userId: String): Flow<DailyLog?> {
+        return logDao.getLogByDate(date, userId).map { it?.toDomainModel() }
+    }
+
+    suspend fun saveDailyLog(log: DailyLog, userId: String) {
+        val logWithUpdate = log.copy(updatedAt = Timestamp.now())
+        logDao.insert(logWithUpdate.toEntity(userId, SyncState.PENDING))
+        enqueueSync()
+    }
+
+    fun getWeightData(userId: String): Flow<List<DailyLog>> {
+        return logDao.getWeightLogs(userId).map { entities ->
+            entities.map { it.toDomainModel() }
+        }
+    }
+
+
 
     /**
      * Triggers WorkManager to sync pending changes to Firebase.
