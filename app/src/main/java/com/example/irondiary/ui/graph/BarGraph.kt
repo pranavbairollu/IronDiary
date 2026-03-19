@@ -181,10 +181,16 @@ fun SimpleBarGraph(
                 val barHeightPx = if (maxLabelValue > 0f) (value / maxLabelValue) * barAreaHeightPx else 0f
                 val animatedBarHeight = barHeightPx * animationProgress.value
 
-                drawRect(
-                    color = barColor,
+                val brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(barColor.copy(alpha = 0.8f), barColor),
+                    startY = barAreaHeightPx - animatedBarHeight,
+                    endY = barAreaHeightPx
+                )
+                drawRoundRect(
+                    brush = brush,
                     topLeft = Offset(x = currentXPx, y = barAreaHeightPx - animatedBarHeight),
-                    size = Size(barWidthPx, animatedBarHeight)
+                    size = Size(barWidthPx, animatedBarHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
                 )
 
                 val label = date.format(formatter)
@@ -222,10 +228,11 @@ fun SimpleBarGraph(
             val tooltipX = (barXPx + (barWidth * zoom / 2) - (tooltipWidth / 2)).coerceIn(0f, size.width - tooltipWidth)
             val tooltipY = barAreaHeightPx - (if (maxLabelValue > 0) (entry.value / maxLabelValue) * barAreaHeightPx else 0f) * animationProgress.value - tooltipHeight - 4.dp.toPx()
 
-            drawRect(
+            drawRoundRect(
                 color = tooltipBackgroundColor,
                 topLeft = Offset(tooltipX, tooltipY),
-                size = Size(tooltipWidth, tooltipHeight)
+                size = Size(tooltipWidth, tooltipHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
             )
             drawText(
                 tooltipLayout,
