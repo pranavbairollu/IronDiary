@@ -33,6 +33,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.Resource
 import com.example.irondiary.data.model.StudySession
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.ui.components.EmptyState
+import com.example.irondiary.ui.components.LoadingState
 import com.example.irondiary.ui.graph.SimpleBarGraph
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
@@ -69,7 +71,7 @@ fun StudyHoursGraph() {
         ) {
             when (studySessionsResource) {
                 is Resource.Loading -> {
-                    CircularProgressIndicator()
+                    LoadingState()
                 }
                 is Resource.Error -> {
                     val errorMessage = (studySessionsResource as Resource.Error).message
@@ -82,7 +84,11 @@ fun StudyHoursGraph() {
                     }
 
                     if (filteredSessions.isEmpty()) {
-                        EmptyState()
+                        EmptyState(
+                            icon = androidx.compose.material.icons.Icons.Default.School,
+                            title = "Ready to Crush Your Goals?",
+                            subtitle = "Log your study sessions to visualize your progress and build a strong academic foundation."
+                        )
                     } else {
                         val data = remember(filteredSessions) {
                             processSessionsForGraph(filteredSessions)
@@ -140,26 +146,8 @@ private fun TasksForDayDialog(date: LocalDate, tasks: List<Task>, onDismiss: () 
 }
 
 
-@Composable
-private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Ready to Crush Your Goals?",
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Log your study sessions to visualize your progress and build a strong academic foundation.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+// Removed local EmptyState definition as it's now in Common.kt
+
 
 enum class FilterType { WEEK, MONTH, ALL }
 

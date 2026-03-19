@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.School
@@ -105,14 +106,69 @@ fun AcademicsScreen() {
                                 onClick = { selectedTabIndex = index })
                         }
                     }
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        when (selectedTabIndex) {
-                            0 -> PendingTasksList()
-                            1 -> CompletedTasksList()
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            when (selectedTabIndex) {
+                                0 -> PendingTasksList()
+                                1 -> CompletedTasksList()
+                            }
                         }
                     }
                 }
             }
         }
+
+        item {
+            val sessionsResource by mainViewModel.studySessions.collectAsState()
+            if (sessionsResource is Resource.Success) {
+                val sessions = (sessionsResource as Resource.Success).data
+                    .sortedByDescending { it.date.seconds }
+                    .take(5)
+                
+                if (sessions.isNotEmpty()) {
+                    Text(
+                        "Recent Sessions",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
+                }
+            }
+        }
+
+        val sessionsResource = mainViewModel.studySessions.value
+        if (sessionsResource is Resource.Success) {
+            val sessions = sessionsResource.data
+                .sortedByDescending { it.date.seconds }
+                .take(5)
+            
+            items(sessions, key = { it.docId }) { session ->
+                StudySessionItem(session)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
     }
 }
+
+
+@Composable
+fun StudySessionItem(session: com.example.irondiary.data.model.StudySession) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(session.subject, style = MaterialTheme.typography.titleMedium)
+                com.example.irondiary.ui.components.SyncIndicator(syncState = session.syncState)
+            }
+            Text(
+                "${session.duration} hrs",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
