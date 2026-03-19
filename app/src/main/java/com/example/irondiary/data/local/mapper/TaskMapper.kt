@@ -12,11 +12,12 @@ fun TaskEntity.toDomainModel(): Task {
         completed = completed,
         createdDate = Timestamp(createdDate / 1000, ((createdDate % 1000) * 1000000).toInt()),
         completedDate = completedDate?.let { Timestamp(it / 1000, ((it % 1000) * 1000000).toInt()) },
-        updatedAt = Timestamp(localUpdatedAt / 1000, ((localUpdatedAt % 1000) * 1000000).toInt())
+        updatedAt = Timestamp(localUpdatedAt / 1000, ((localUpdatedAt % 1000) * 1000000).toInt()),
+        syncState = syncState
     )
 }
 
-fun Task.toEntity(userId: String, syncState: SyncState = SyncState.SYNCED): TaskEntity {
+fun Task.toEntity(userId: String, syncState: SyncState): TaskEntity {
     return TaskEntity(
         id = docId,
         userId = userId,

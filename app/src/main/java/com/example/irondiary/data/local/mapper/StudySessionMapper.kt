@@ -12,7 +12,8 @@ fun StudySessionEntity.toDomainModel(): StudySession {
         subject = subject,
         date = Timestamp(Date(date)),
         duration = duration,
-        updatedAt = Timestamp(Date(localUpdatedAt))
+        updatedAt = Timestamp(Date(localUpdatedAt)),
+        syncState = syncState
     )
 }
 
