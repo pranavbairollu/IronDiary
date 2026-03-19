@@ -4,11 +4,13 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.local.IronDiaryDatabase
 import com.example.irondiary.data.local.SyncState
 import com.example.irondiary.data.local.mapper.toDomainModel
 import com.example.irondiary.data.local.mapper.toEntity
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.data.model.StudySession
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -20,104 +22,173 @@ import kotlinx.coroutines.withContext
  * Executes bidirectional background synchronization of the IronDiary offline databases
  * against the remote Firebase Firestore structure. Handles Conflict Resolution via specific timestamps.
  */
-class SyncWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(appContext, workerParams) {
+class SyncWorker(context: Context, workerParams: WorkerParameters) :
+    CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val auth = FirebaseAuth.getInstance()
-        val user = auth.currentUser
-        
-        // Critical: User Isolation
-        if (user == null) {
-            return@withContext Result.success()
-        }
-        val userId = user.uid
-
+        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return@withContext Result.failure()
         val db = IronDiaryDatabase.getDatabase(applicationContext)
-        val taskDao = db.taskDao()
         val firestore = FirebaseFirestore.getInstance()
+
+        val tasksSuccess = syncTasks(db, firestore, userId)
+        val studySuccess = syncStudySessions(db, firestore, userId)
+        val logsSuccess = syncDailyLogs(db, firestore, userId)
+
+        if (tasksSuccess && studySuccess && logsSuccess) {
+            Result.success()
+        } else {
+            Result.retry()
+        }
+    }
+
+    private suspend fun syncTasks(db: IronDiaryDatabase, firestore: FirebaseFirestore, userId: String): Boolean {
+        val taskDao = db.taskDao()
         val tasksCollection = firestore.collection("users").document(userId).collection("tasks")
 
-        try {
-            // STEP 1: Fetch remote snapshot
-            val querySnapshot = tasksCollection.get().await()
-            val remoteTasks = querySnapshot.toObjects(Task::class.java)
+        return try {
+            // 1. Fetch Remote
+            val remoteTasks = tasksCollection.get().await().toObjects(Task::class.java)
             val remoteTaskMap = remoteTasks.associateBy { it.docId }
 
-            // STEP 2: Push local outstanding operations (PENDING, FAILED, DELETED)
-            val unsyncedTasks = taskDao.getUnsyncedTasks(userId)
-            
-            for (localTask in unsyncedTasks) {
+            // 2. Process Local Changes (Push to Remote)
+            val locals = taskDao.getUnsyncedTasks(userId)
+            for (local in locals) {
                 try {
-                    when (localTask.syncState) {
+                    when (local.syncState) {
                         SyncState.DELETED -> {
-                            Log.d("SyncWorker", "Syncing DELETION for task: ${localTask.id}")
-                            // Execute Cloud Deletion, then Hard Delete locally
-                            tasksCollection.document(localTask.id).delete().await()
-                            taskDao.deleteById(localTask.id, userId)
-                            Log.d("SyncWorker", "Task ${localTask.id} permanently removed from Room after successful remote delete.")
+                            tasksCollection.document(local.id).delete().await()
+                            taskDao.deleteById(local.id, userId)
                         }
                         SyncState.PENDING, SyncState.FAILED -> {
-                            Log.d("SyncWorker", "Syncing PENDING/FAILED task: ${localTask.id}")
-                            val remoteVersion = remoteTaskMap[localTask.id]
-                            
-                            // CONFLICT RESOLUTION: Last Write Wins, Timestamp Based
-                            if (remoteVersion != null) {
-                                val remoteTime = remoteVersion.updatedAt.toDate().time
-                                if (remoteTime > localTask.localUpdatedAt) {
-                                    // Remote mapping is newer than the unsynced local edit. Surrender.
-                                    Log.d("SyncWorker", "Local PENDING task ${localTask.id} abandoned due to newer remote timestamp.")
-                                    continue 
-                                }
+                            val remote = remoteTaskMap[local.id]
+                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                tasksCollection.document(local.id).set(local.toDomainModel(), SetOptions.merge()).await()
+                                taskDao.update(local.copy(syncState = SyncState.SYNCED))
+                            } else {
+                                Log.d("SyncWorker", "Local task ${local.id} abandoned due to newer remote data.")
+                                taskDao.update(remote.toEntity(userId, SyncState.SYNCED))
                             }
-                            
-                            // Local data is newer, push to cloud idempotenly
-                            val domainModel = localTask.toDomainModel()
-                            tasksCollection.document(localTask.id).set(domainModel, SetOptions.merge()).await()
-                            taskDao.update(localTask.copy(syncState = SyncState.SYNCED))
-                            Log.d("SyncWorker", "Task ${localTask.id} successfully synced to Firestore.")
                         }
                         else -> Unit
                     }
                 } catch (e: Exception) {
-                    Log.e("SyncWorker", "Failed to push specific task ${localTask.id}", e)
-                    // If it was PENDING/FAILED, keep it as FAILED. If DELETED, keep it as DELETED so it retries as a deletion.
-                    if (localTask.syncState == SyncState.PENDING) {
-                        taskDao.update(localTask.copy(syncState = SyncState.FAILED))
-                    }
+                    Log.e("SyncWorker", "Failed to sync task ${local.id}", e)
                 }
             }
 
-            // STEP 3: Apply Remote Snapshot down to local storage
-            for (remoteTask in remoteTasks) {
-                // By providing a blank docId fallback in Firebase UI previously, some items may have blank IDs remotely
-                // We generate or fix IDs before mapping them directly.
-                val safeDocId = remoteTask.docId
-                if (safeDocId.isBlank()) continue
-                
-                val localTask = taskDao.getTaskById(safeDocId, userId)
-                
-                if (localTask == null) {
-                    // Safe injection of brand-new remote element
-                    Log.d("SyncWorker", "Injecting new remote task to Room: ${remoteTask.docId}")
-                    taskDao.insert(remoteTask.toEntity(userId, SyncState.SYNCED))
-                } else if (localTask.syncState == SyncState.SYNCED) {
-                    // CONFLICT RESOLUTION
-                    val remoteTime = remoteTask.updatedAt.toDate().time
-                    if (remoteTime > localTask.localUpdatedAt) {
-                        // Safe overwrite of out-of-date local element with synced element
-                        Log.d("SyncWorker", "Updating local task ${localTask.id} with newer remote version.")
-                        taskDao.update(remoteTask.toEntity(userId, SyncState.SYNCED))
+            // 3. Process Remote Injections (Pull to Local)
+            for (remote in remoteTasks) {
+                val local = taskDao.getTaskById(remote.docId, userId)
+                if (local == null) {
+                    taskDao.insert(remote.toEntity(userId, SyncState.SYNCED))
+                } else if (local.syncState == SyncState.SYNCED) {
+                    if (remote.updatedAt.toDate().time > local.localUpdatedAt) {
+                        taskDao.update(remote.toEntity(userId, SyncState.SYNCED))
                     }
                 }
             }
-            
-            Result.success()
+            true
         } catch (e: Exception) {
-            Log.e("SyncWorker", "Global Sync execution failed completely due to exception", e)
-            Result.retry() // Implements exponential back-off safely within WorkManager constraints
+            Log.e("SyncWorker", "Error syncing tasks", e)
+            false
+        }
+    }
+
+    private suspend fun syncStudySessions(db: IronDiaryDatabase, firestore: FirebaseFirestore, userId: String): Boolean {
+        val studyDao = db.studySessionDao()
+        val studyCollection = firestore.collection("users").document(userId).collection("study_sessions")
+
+        return try {
+            val remoteSessions = studyCollection.get().await().toObjects(StudySession::class.java)
+            val remoteMap = remoteSessions.associateBy { it.docId }
+
+            val locals = studyDao.getUnsyncedSessions(userId)
+            for (local in locals) {
+                try {
+                    when (local.syncState) {
+                        SyncState.DELETED -> {
+                            studyCollection.document(local.id).delete().await()
+                            studyDao.deleteById(local.id, userId)
+                        }
+                        SyncState.PENDING, SyncState.FAILED -> {
+                            val remote = remoteMap[local.id]
+                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                studyCollection.document(local.id).set(local.toDomainModel(), SetOptions.merge()).await()
+                                studyDao.update(local.copy(syncState = SyncState.SYNCED))
+                            } else {
+                                studyDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                            }
+                        }
+                        else -> Unit
+                    }
+                } catch (e: Exception) {
+                    Log.e("SyncWorker", "Failed to sync session ${local.id}", e)
+                }
+            }
+
+            for (remote in remoteSessions) {
+                val local = studyDao.getSessionById(remote.docId, userId)
+                if (local == null) {
+                    studyDao.insert(remote.toEntity(userId, SyncState.SYNCED))
+                } else if (local.syncState == SyncState.SYNCED) {
+                    if (remote.updatedAt.toDate().time > local.localUpdatedAt) {
+                        studyDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SyncWorker", "Error syncing study sessions", e)
+            false
+        }
+    }
+
+    private suspend fun syncDailyLogs(db: IronDiaryDatabase, firestore: FirebaseFirestore, userId: String): Boolean {
+        val logDao = db.dailyLogDao()
+        val logsCollection = firestore.collection("users").document(userId).collection("daily_logs")
+
+        return try {
+            val remoteLogs = logsCollection.get().await().toObjects(DailyLog::class.java)
+            val remoteMap = remoteLogs.associateBy { it.date }
+
+            val locals = logDao.getUnsyncedLogs(userId)
+            for (local in locals) {
+                try {
+                    when (local.syncState) {
+                        SyncState.DELETED -> {
+                            logsCollection.document(local.date).delete().await()
+                            logDao.deleteById(local.id, userId)
+                        }
+                        SyncState.PENDING, SyncState.FAILED -> {
+                            val remote = remoteMap[local.date]
+                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                logsCollection.document(local.date).set(local.toDomainModel(), SetOptions.merge()).await()
+                                logDao.update(local.copy(syncState = SyncState.SYNCED))
+                            } else {
+                                logDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                            }
+                        }
+                        else -> Unit
+                    }
+                } catch (e: Exception) {
+                    Log.e("SyncWorker", "Failed to sync log ${local.date}", e)
+                }
+            }
+
+            for (remote in remoteLogs) {
+                val local = logDao.getLogById("${userId}_${remote.date}", userId)
+                if (local == null) {
+                    logDao.insert(remote.toEntity(userId, SyncState.SYNCED))
+                } else if (local.syncState == SyncState.SYNCED) {
+                    if (remote.updatedAt.toDate().time > local.localUpdatedAt) {
+                        logDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SyncWorker", "Error syncing daily logs", e)
+            false
         }
     }
 }
