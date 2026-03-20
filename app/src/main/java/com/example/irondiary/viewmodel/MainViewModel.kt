@@ -248,6 +248,36 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         }
     }
 
+    fun updateTaskDescription(task: Task, newDescription: String) {
+        val trimmedDesc = newDescription.trim()
+        if (trimmedDesc.isEmpty()) {
+            _saveStatus.value = Resource.Error("Task description cannot be empty.")
+            return
+        }
+        if (trimmedDesc.length > 500) {
+            _saveStatus.value = Resource.Error("Task description is too long.")
+            return
+        }
+
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            _saveStatus.value = Resource.Error("Must be logged in.")
+            return
+        }
+
+        _saveStatus.value = Resource.Loading
+        val updatedTask = task.copy(description = trimmedDesc)
+
+        viewModelScope.launch {
+            try {
+                repository.updateTask(updatedTask, userId)
+                _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to update task description: ${e.message}")
+            }
+        }
+    }
+
     fun deleteTask(task: Task) {
         val docId = task.docId
         if (docId.isEmpty()) return

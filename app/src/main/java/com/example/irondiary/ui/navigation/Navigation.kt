@@ -34,7 +34,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.irondiary.data.Resource
 import com.example.irondiary.ui.academics.AcademicsScreen
 import com.example.irondiary.ui.academics.LogStudySessionDialog
-import com.example.irondiary.ui.academics.LogTaskDialog
+import com.example.irondiary.ui.academics.TaskDialog
 import com.example.irondiary.ui.auth.AuthScreen
 import com.example.irondiary.ui.calendar.CalendarScreen
 import com.example.irondiary.ui.graph.WeightGraphScreen
@@ -80,7 +80,7 @@ fun TopLevelNav() {
     val navController = rememberNavController()
     var showLogChoiceDialog by remember { mutableStateOf(false) }
     var showLogStudySessionDialog by remember { mutableStateOf(false) }
-    var showLogTaskDialog by remember { mutableStateOf(false) }
+    var showLogTaskDialog by remember { mutableStateOf(false) } // Renamed logic-wise, but keep variable name for simplicity if preferred, or rename it too
 
     val coroutineScope = rememberCoroutineScope()
     val application = LocalContext.current.applicationContext as Application
@@ -139,7 +139,7 @@ fun TopLevelNav() {
     }
 
     if (showLogTaskDialog) {
-        LogTaskDialog(
+        TaskDialog(
             onDismiss = { showLogTaskDialog = false },
             onConfirm = { description ->
                 coroutineScope.launch {

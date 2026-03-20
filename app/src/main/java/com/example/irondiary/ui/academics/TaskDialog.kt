@@ -23,22 +23,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.irondiary.data.model.Task
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LogTaskDialog(
+fun TaskDialog(
+    task: Task? = null,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     isLoading: Boolean = false
 ) {
-    var description by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf(task?.description ?: "") }
     val trimmedDesc = description.trim()
     val isLengthTooLong = trimmedDesc.length > 500
     val isDescValid = trimmedDesc.isNotEmpty() && !isLengthTooLong
+    val isEditing = task != null
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a New Task") },
+        title = { Text(if (isEditing) "Edit Task" else "Add a New Task") },
         text = {
             Column {
                 OutlinedTextField(
@@ -71,7 +74,7 @@ fun LogTaskDialog(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Log")
+                    Text(if (isEditing) "Save" else "Log")
                 }
             }
         },

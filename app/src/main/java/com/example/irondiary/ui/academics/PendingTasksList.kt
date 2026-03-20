@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -100,6 +101,7 @@ fun PendingTasksList() {
                                     task = task, 
                                     onTaskToggled = { mainViewModel.toggleTaskCompletion(it) },
                                     onDeleteTask = { mainViewModel.deleteTask(it) },
+                                    onEditTask = { t, desc -> mainViewModel.updateTaskDescription(t, desc) },
                                     isInteractionDisabled = isLoading
                                 )
                             }
@@ -116,9 +118,11 @@ fun PendingTaskItem(
     task: Task, 
     onTaskToggled: (Task) -> Unit, 
     onDeleteTask: (Task) -> Unit,
+    onEditTask: (Task, String) -> Unit,
     isInteractionDisabled: Boolean = false
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -142,6 +146,18 @@ fun PendingTaskItem(
         )
     }
 
+    if (showEditDialog) {
+        TaskDialog(
+            task = task,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { newDesc ->
+                onEditTask(task, newDesc)
+                showEditDialog = false
+            },
+            isLoading = isInteractionDisabled
+        )
+    }
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -159,6 +175,9 @@ fun PendingTaskItem(
                 SyncIndicator(syncState = task.syncState)
             }
             Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = { showEditDialog = true }, enabled = !isInteractionDisabled) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit task", tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = { showDeleteDialog = true }, enabled = !isInteractionDisabled) {
                 Icon(Icons.Filled.Delete, contentDescription = "Delete task", tint = if (isInteractionDisabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)
             }
