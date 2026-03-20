@@ -49,9 +49,13 @@ class IronDiaryRepository(val context: android.content.Context) {
      * Inserts a new task locally with PENDING sync status and triggers a sync work.
      */
     suspend fun addTask(userId: String, description: String) {
+        val trimmedDesc = description.trim()
+        if (trimmedDesc.isBlank()) throw IllegalArgumentException("Task description cannot be empty")
+        if (trimmedDesc.length > 500) throw IllegalArgumentException("Task description too long")
+
         val task = Task(
             docId = UUID.randomUUID().toString(),
-            description = description,
+            description = trimmedDesc,
             createdDate = Timestamp.now(),
             updatedAt = Timestamp.now()
         )
@@ -63,7 +67,11 @@ class IronDiaryRepository(val context: android.content.Context) {
      * Updates task locally as PENDING and schedules sync.
      */
     suspend fun updateTask(task: Task, userId: String) {
-        val updatedTask = task.copy(updatedAt = Timestamp.now())
+        val trimmedDesc = task.description.trim()
+        if (trimmedDesc.isBlank()) throw IllegalArgumentException("Task description cannot be empty")
+        if (trimmedDesc.length > 500) throw IllegalArgumentException("Task description too long")
+        
+        val updatedTask = task.copy(description = trimmedDesc, updatedAt = Timestamp.now())
         taskDao.insert(updatedTask.toEntity(userId = userId, syncState = SyncState.PENDING))
         enqueueSync()
     }
@@ -119,6 +127,11 @@ class IronDiaryRepository(val context: android.content.Context) {
     }
 
     suspend fun addStudySession(session: StudySession, userId: String) {
+        if (session.subject.isBlank()) throw IllegalArgumentException("Subject cannot be empty")
+        if (session.duration <= 0 || session.duration > 24) {
+            throw IllegalArgumentException("Duration must be between 0 and 24 hours")
+        }
+
         val docId = if (session.docId.isBlank()) UUID.randomUUID().toString() else session.docId
         val sessionWithId = session.copy(
             docId = docId,

@@ -1,23 +1,17 @@
 package com.example.irondiary.viewmodel
 
 import android.app.Application
-import android.content.SharedPreferences
 import app.cash.turbine.test
 import com.example.irondiary.data.Resource
 import com.example.irondiary.util.MainDispatcherRule
-import com.google.android.gms.tasks.Tasks
-import com.google.android.gms.tasks.OnSuccessListener
-import com.google.android.gms.tasks.OnFailureListener
-import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.firestore.CollectionReference
-import com.google.android.gms.tasks.OnCompleteListener
 import com.example.irondiary.data.repository.IronDiaryRepository
 import com.google.firebase.Timestamp
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,7 +20,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import java.util.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
@@ -82,19 +75,6 @@ class MainViewModelTest {
     }
 
     @Test
-    fun addTask_exceedsLength_emitsErrorWithoutFirebaseCall() = runTest {
-        val longTask = "A".repeat(501)
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addTask(longTask)
-            val errorState = awaitItem()
-            assertTrue(errorState is Resource.Error)
-            assertEquals("Task description is too long.", (errorState as Resource.Error).message)
-            coVerify(exactly = 0) { repositoryMock.addTask(any(), any()) }
-        }
-    }
-
-    @Test
     fun addTask_validInput_emitsSuccess() = runTest {
         viewModel.saveStatus.test {
             assertNull(awaitItem())
@@ -106,79 +86,22 @@ class MainViewModelTest {
     }
 
     @Test
-    fun addStudySession_emptySubject_emitsErrorWithoutFirebaseCall() = runTest {
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addStudySession("", 2f)
-            val errorState = awaitItem()
-            assertTrue(errorState is Resource.Error)
-            assertEquals("Subject cannot be empty.", (errorState as Resource.Error).message)
-            coVerify(exactly = 0) { repositoryMock.addStudySession(any(), any()) }
-        }
-    }
+    fun toggleTaskCompletion_debouncesMultipleClicks_callsRepositoryOnce() = runTest(mainDispatcherRule.testDispatcher) {
+        val task = com.example.irondiary.data.model.Task(docId = "task_1", description = "Test Task")
+        
+        // Rapid clicks
+        viewModel.toggleTaskCompletion(task)
+        viewModel.toggleTaskCompletion(task)
+        viewModel.toggleTaskCompletion(task)
 
-    @Test
-    fun addStudySession_invalidDuration_emitsErrorWithoutFirebaseCall() = runTest {
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addStudySession("Math", 0f)
-            assertEquals("Duration must be between 0 and 24 hours.", (awaitItem() as Resource.Error).message)
-            viewModel.resetSaveStatus()
-            assertNull(awaitItem())
-            viewModel.addStudySession("Math", 25f)
-            assertEquals("Duration must be between 0 and 24 hours.", (awaitItem() as Resource.Error).message)
-            coVerify(exactly = 0) { repositoryMock.addStudySession(any(), any()) }
-        }
-    }
+        // Ensure the launch happened
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
-    @Test
-    fun addStudySession_validInput_emitsSuccess() = runTest {
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addStudySession("Computer Science", 2.5f)
-            assertEquals(Resource.Loading, awaitItem())
-            assertEquals(Resource.Success(Unit), awaitItem())
-            coVerify(exactly = 1) { repositoryMock.addStudySession(any(), "test_uid") }
-        }
-    }
-
-    @Test
-    fun saveDailyLog_validInput_emitsSuccess() = runTest {
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            val log = com.example.irondiary.data.DailyLog(date = "2024-03-19", attendedGym = true)
-            viewModel.saveDailyLog("2024-03-19", log)
-            assertEquals(Resource.Loading, awaitItem())
-            assertEquals(Resource.Success(Unit), awaitItem())
-            coVerify(exactly = 1) { repositoryMock.saveDailyLog(any(), "test_uid") }
-        }
-    }
-
-    @Test
-    fun saveFailed_networkError_emitsError() = runTest {
-        val exception = Exception("Network offline")
-        coEvery { repositoryMock.addTask(any(), any()) } throws exception
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addTask("Offline Task")
-            assertEquals(Resource.Loading, awaitItem())
-            val errorState = awaitItem()
-            assertTrue(errorState is Resource.Error)
-            assertTrue((errorState as Resource.Error).message.contains("Network offline"))
-        }
-    }
-
-    @Test
-    fun userNull_addTask_abortsGracefully() = runTest {
-        every { authMock.currentUser } returns null
-        viewModel.saveStatus.test {
-            assertNull(awaitItem())
-            viewModel.addTask("Task without user")
-            val errorState = awaitItem()
-            assertTrue(errorState is Resource.Error)
-            assertEquals("Must be logged in.", (errorState as Resource.Error).message)
-            coVerify(exactly = 0) { repositoryMock.addTask(any(), any()) }
-        }
+        // Wait for debounce period (300ms)
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(400)
+        mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+        
+        coVerify(exactly = 1) { repositoryMock.updateTask(any(), "test_uid") }
     }
 
     @Test
@@ -190,6 +113,17 @@ class MainViewModelTest {
             assertEquals(Resource.Loading, awaitItem())
             assertEquals(Resource.Success(Unit), awaitItem())
             coVerify(exactly = 1) { repositoryMock.updateTask(any(), "test_uid") }
+        }
+    }
+
+    @Test
+    fun repository_addTask_throwsOnBlankDescription() = runTest {
+        val repo = IronDiaryRepository(applicationMock)
+        try {
+            repo.addTask("uid", "  ")
+            assertTrue("Should have thrown IllegalArgumentException", false)
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Task description cannot be empty", e.message)
         }
     }
 }

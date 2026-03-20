@@ -7,7 +7,10 @@ import com.example.irondiary.data.local.SyncState
 /**
  * Single Source of Truth for a Task, persisted using Room DB.
  */
-@Entity(tableName = "tasks")
+@Entity(
+    tableName = "tasks",
+    indices = [androidx.room.Index(value = ["userId"])]
+)
 data class TaskEntity(
     @PrimaryKey
     val id: String,

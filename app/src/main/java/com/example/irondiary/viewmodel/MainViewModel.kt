@@ -1,6 +1,7 @@
 package com.example.irondiary.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.irondiary.data.DailyLog
@@ -11,6 +12,7 @@ import com.google.firebase.Timestamp
 import com.example.irondiary.data.repository.IronDiaryRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +49,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private var weightDataJob: Job? = null
     private var studySessionsJob: Job? = null
     private var tasksJob: Job? = null
+    
+    // Map to keep track of active toggle jobs per taskId to prevent rapid UI toggling floods
+    private val activeToggleJobs = mutableMapOf<String, Job>()
 
     init {
         fetchDailyLogs()
@@ -222,28 +227,31 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     }
 
     fun toggleTaskCompletion(task: Task) {
+        val userId = auth.currentUser?.uid ?: return
         val docId = task.docId
         if (docId.isEmpty()) return
-
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            _saveStatus.value = Resource.Error("Must be logged in.")
-            return
-        }
-
-        _saveStatus.value = Resource.Loading
-        val newCompletedStatus = !task.completed
-        val updatedTask = task.copy(
-            completed = newCompletedStatus,
-            completedDate = if (newCompletedStatus) com.google.firebase.Timestamp.now() else null
-        )
-
-        viewModelScope.launch {
+        
+        // Cancel any existing toggle job for this specific task
+        activeToggleJobs[docId]?.cancel()
+        
+        // Debounce: Wait 300ms before pushing to repository
+        activeToggleJobs[docId] = viewModelScope.launch {
             try {
+                delay(300)
+                
+                val newCompletedStatus = !task.completed
+                val updatedTask = task.copy(
+                    completed = newCompletedStatus,
+                    completedDate = if (newCompletedStatus) com.google.firebase.Timestamp.now() else null
+                )
                 repository.updateTask(updatedTask, userId)
-                _saveStatus.value = Resource.Success(Unit)
+                // Success is handled by the Flow observer in the ViewModel
             } catch (e: Exception) {
-                _saveStatus.value = Resource.Error("Failed to update task: ${e.message}")
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("MainViewModel", "Failed to toggle task", e)
+                }
+            } finally {
+                activeToggleJobs.remove(docId)
             }
         }
     }
