@@ -95,6 +95,17 @@ class SyncWorker(
                     }
                 }
             }
+
+            // 4. Remote Deletion Mirroring (Pruning)
+            // Identify local SYNCED records that no longer exist on the server
+            val allLocals = taskDao.getTasksImmediate(userId)
+            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
+            for (local in syncedLocals) {
+                if (!remoteTaskMap.containsKey(local.id)) {
+                    Log.d("SyncWorker", "Pruning local task ${local.id} as it was deleted remotely.")
+                    taskDao.deleteById(local.id, userId)
+                }
+            }
             true
         } catch (e: Exception) {
             Log.e("SyncWorker", "Error syncing tasks", e)
@@ -144,6 +155,16 @@ class SyncWorker(
                     }
                 }
             }
+
+            // Remote Deletion Mirroring (Pruning)
+            val allLocals = studyDao.getSessionsImmediate(userId)
+            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
+            for (local in syncedLocals) {
+                if (!remoteMap.containsKey(local.id)) {
+                    Log.d("SyncWorker", "Pruning local session ${local.id} as it was deleted remotely.")
+                    studyDao.deleteById(local.id, userId)
+                }
+            }
             true
         } catch (e: Exception) {
             Log.e("SyncWorker", "Error syncing study sessions", e)
@@ -191,6 +212,16 @@ class SyncWorker(
                     if (remote.updatedAt.toDate().time > local.localUpdatedAt) {
                         logDao.update(remote.toEntity(userId, SyncState.SYNCED))
                     }
+                }
+            }
+
+            // Remote Deletion Mirroring (Pruning)
+            val allLocals = logDao.getLogsImmediate(userId)
+            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
+            for (local in syncedLocals) {
+                if (!remoteMap.containsKey(local.date)) {
+                    Log.d("SyncWorker", "Pruning local log for ${local.date} as it was deleted remotely.")
+                    logDao.deleteById(local.id, userId)
                 }
             }
             true
