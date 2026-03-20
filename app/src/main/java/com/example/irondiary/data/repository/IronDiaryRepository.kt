@@ -91,8 +91,8 @@ class IronDiaryRepository(val context: android.content.Context) {
             it.copy(syncState = SyncState.DELETED, localUpdatedAt = System.currentTimeMillis())
         }
         
-        // Iterative update acts effectively as batch-update thanks to Room transactions
-        deletedEntities.forEach { taskDao.update(it) }
+        // Update all identified entities in a single Room transaction
+        taskDao.updateAll(deletedEntities)
         enqueueSync()
     }
 
@@ -104,7 +104,7 @@ class IronDiaryRepository(val context: android.content.Context) {
             it.copy(syncState = SyncState.DELETED, localUpdatedAt = System.currentTimeMillis())
         }
         
-        deletedEntities.forEach { taskDao.update(it) }
+        taskDao.updateAll(deletedEntities)
         enqueueSync()
     }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.local.IronDiaryDatabase
 import com.example.irondiary.data.local.SyncState
@@ -14,6 +15,7 @@ import com.example.irondiary.data.model.StudySession
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.WriteBatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -38,8 +40,13 @@ class SyncWorker(
         val db = IronDiaryDatabase.getDatabase(applicationContext)
         val firestore = FirebaseFirestore.getInstance()
 
+        setProgress(workDataOf("status" to "Syncing tasks..."))
         val tasksSuccess = syncTasks(db, firestore, userId)
+        
+        setProgress(workDataOf("status" to "Syncing study sessions..."))
         val studySuccess = syncStudySessions(db, firestore, userId)
+        
+        setProgress(workDataOf("status" to "Syncing daily logs..."))
         val logsSuccess = syncDailyLogs(db, firestore, userId)
 
         if (tasksSuccess && studySuccess && logsSuccess) {
@@ -58,30 +65,43 @@ class SyncWorker(
             val remoteTasks = tasksCollection.get().await().toObjects(Task::class.java)
             val remoteTaskMap = remoteTasks.associateBy { it.docId }
 
-            // 2. Process Local Changes (Push to Remote)
+            // 2. Process Local Changes (Push to Remote with Batching)
             val locals = taskDao.getUnsyncedTasks(userId)
-            for (local in locals) {
-                try {
-                    when (local.syncState) {
-                        SyncState.DELETED -> {
-                            tasksCollection.document(local.id).delete().await()
-                            taskDao.deleteById(local.id, userId)
-                        }
-                        SyncState.PENDING, SyncState.FAILED -> {
-                            val remote = remoteTaskMap[local.id]
-                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
-                                tasksCollection.document(local.id).set(local.toDomainModel(), SetOptions.merge()).await()
-                                taskDao.update(local.copy(syncState = SyncState.SYNCED))
-                            } else {
-                                Log.d("SyncWorker", "Local task ${local.id} abandoned due to newer remote data.")
-                                taskDao.update(remote.toEntity(userId, SyncState.SYNCED))
+            if (locals.isNotEmpty()) {
+                val batch = firestore.batch()
+                val pushedLocals = mutableListOf<com.example.irondiary.data.local.entity.TaskEntity>()
+                val localDeletesToPush = mutableListOf<com.example.irondiary.data.local.entity.TaskEntity>()
+
+                for (local in locals) {
+                    try {
+                        when (local.syncState) {
+                            SyncState.DELETED -> {
+                                batch.delete(tasksCollection.document(local.id))
+                                localDeletesToPush.add(local)
                             }
+                            SyncState.PENDING, SyncState.FAILED -> {
+                                val remote = remoteTaskMap[local.id]
+                                if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                    batch.set(tasksCollection.document(local.id), local.toDomainModel(), SetOptions.merge())
+                                    pushedLocals.add(local.copy(syncState = SyncState.SYNCED))
+                                } else {
+                                    Log.d("SyncWorker", "Local task ${local.id} abandoned due to newer remote data.")
+                                    taskDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                                }
+                            }
+                            else -> Unit
                         }
-                        else -> Unit
+                    } catch (e: Exception) {
+                        Log.e("SyncWorker", "Failed to stage task ${local.id} for batch", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("SyncWorker", "Failed to sync task ${local.id}", e)
                 }
+                
+                // Commit Firestore Batch
+                batch.commit().await()
+                
+                // Atomic Local Room Updates
+                if (pushedLocals.isNotEmpty()) taskDao.updateAll(pushedLocals)
+                if (localDeletesToPush.isNotEmpty()) taskDao.deleteAll(localDeletesToPush)
             }
 
             // 3. Process Remote Injections (Pull to Local)
@@ -97,14 +117,13 @@ class SyncWorker(
             }
 
             // 4. Remote Deletion Mirroring (Pruning)
-            // Identify local SYNCED records that no longer exist on the server
             val allLocals = taskDao.getTasksImmediate(userId)
-            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
-            for (local in syncedLocals) {
-                if (!remoteTaskMap.containsKey(local.id)) {
-                    Log.d("SyncWorker", "Pruning local task ${local.id} as it was deleted remotely.")
-                    taskDao.deleteById(local.id, userId)
-                }
+            val nodesToRemove = allLocals.filter { 
+                it.syncState == SyncState.SYNCED && !remoteTaskMap.containsKey(it.id) 
+            }
+            if (nodesToRemove.isNotEmpty()) {
+                Log.d("SyncWorker", "Pruning ${nodesToRemove.size} tasks deleted remotely.")
+                taskDao.deleteAll(nodesToRemove)
             }
             true
         } catch (e: Exception) {
@@ -121,30 +140,41 @@ class SyncWorker(
             val remoteSessions = studyCollection.get().await().toObjects(StudySession::class.java)
             val remoteMap = remoteSessions.associateBy { it.docId }
 
+            // 2. Process Local Changes (Push to Remote with Batching)
             val locals = studyDao.getUnsyncedSessions(userId)
-            for (local in locals) {
-                try {
-                    when (local.syncState) {
-                        SyncState.DELETED -> {
-                            studyCollection.document(local.id).delete().await()
-                            studyDao.deleteById(local.id, userId)
-                        }
-                        SyncState.PENDING, SyncState.FAILED -> {
-                            val remote = remoteMap[local.id]
-                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
-                                studyCollection.document(local.id).set(local.toDomainModel(), SetOptions.merge()).await()
-                                studyDao.update(local.copy(syncState = SyncState.SYNCED))
-                            } else {
-                                studyDao.update(remote.toEntity(userId, SyncState.SYNCED))
+            if (locals.isNotEmpty()) {
+                val batch = firestore.batch()
+                val pushedLocals = mutableListOf<com.example.irondiary.data.local.entity.StudySessionEntity>()
+                val localDeletesToPush = mutableListOf<com.example.irondiary.data.local.entity.StudySessionEntity>()
+
+                for (local in locals) {
+                    try {
+                        when (local.syncState) {
+                            SyncState.DELETED -> {
+                                batch.delete(studyCollection.document(local.id))
+                                localDeletesToPush.add(local)
                             }
+                            SyncState.PENDING, SyncState.FAILED -> {
+                                val remote = remoteMap[local.id]
+                                if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                    batch.set(studyCollection.document(local.id), local.toDomainModel(), SetOptions.merge())
+                                    pushedLocals.add(local.copy(syncState = SyncState.SYNCED))
+                                } else {
+                                    studyDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                                }
+                            }
+                            else -> Unit
                         }
-                        else -> Unit
+                    } catch (e: Exception) {
+                        Log.e("SyncWorker", "Failed to stage session ${local.id} for batch", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("SyncWorker", "Failed to sync session ${local.id}", e)
                 }
+                batch.commit().await()
+                if (pushedLocals.isNotEmpty()) studyDao.updateAll(pushedLocals)
+                if (localDeletesToPush.isNotEmpty()) studyDao.deleteAll(localDeletesToPush)
             }
 
+            // 3. Process Remote Injections (Pull to Local)
             for (remote in remoteSessions) {
                 val local = studyDao.getSessionById(remote.docId, userId)
                 if (local == null) {
@@ -156,14 +186,14 @@ class SyncWorker(
                 }
             }
 
-            // Remote Deletion Mirroring (Pruning)
+            // 4. Remote Deletion Mirroring (Pruning)
             val allLocals = studyDao.getSessionsImmediate(userId)
-            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
-            for (local in syncedLocals) {
-                if (!remoteMap.containsKey(local.id)) {
-                    Log.d("SyncWorker", "Pruning local session ${local.id} as it was deleted remotely.")
-                    studyDao.deleteById(local.id, userId)
-                }
+            val nodesToRemove = allLocals.filter { 
+                it.syncState == SyncState.SYNCED && !remoteMap.containsKey(it.id) 
+            }
+            if (nodesToRemove.isNotEmpty()) {
+                Log.d("SyncWorker", "Pruning ${nodesToRemove.size} sessions deleted remotely.")
+                studyDao.deleteAll(nodesToRemove)
             }
             true
         } catch (e: Exception) {
@@ -180,30 +210,41 @@ class SyncWorker(
             val remoteLogs = logsCollection.get().await().toObjects(DailyLog::class.java)
             val remoteMap = remoteLogs.associateBy { it.date }
 
+            // 2. Process Local Changes (Push to Remote with Batching)
             val locals = logDao.getUnsyncedLogs(userId)
-            for (local in locals) {
-                try {
-                    when (local.syncState) {
-                        SyncState.DELETED -> {
-                            logsCollection.document(local.date).delete().await()
-                            logDao.deleteById(local.id, userId)
-                        }
-                        SyncState.PENDING, SyncState.FAILED -> {
-                            val remote = remoteMap[local.date]
-                            if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
-                                logsCollection.document(local.date).set(local.toDomainModel(), SetOptions.merge()).await()
-                                logDao.update(local.copy(syncState = SyncState.SYNCED))
-                            } else {
-                                logDao.update(remote.toEntity(userId, SyncState.SYNCED))
+            if (locals.isNotEmpty()) {
+                val batch = firestore.batch()
+                val pushedLocals = mutableListOf<com.example.irondiary.data.local.entity.DailyLogEntity>()
+                val localDeletesToPush = mutableListOf<com.example.irondiary.data.local.entity.DailyLogEntity>()
+
+                for (local in locals) {
+                    try {
+                        when (local.syncState) {
+                            SyncState.DELETED -> {
+                                batch.delete(logsCollection.document(local.date))
+                                localDeletesToPush.add(local)
                             }
+                            SyncState.PENDING, SyncState.FAILED -> {
+                                val remote = remoteMap[local.date]
+                                if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
+                                    batch.set(logsCollection.document(local.date), local.toDomainModel(), SetOptions.merge())
+                                    pushedLocals.add(local.copy(syncState = SyncState.SYNCED))
+                                } else {
+                                    logDao.update(remote.toEntity(userId, SyncState.SYNCED))
+                                }
+                            }
+                            else -> Unit
                         }
-                        else -> Unit
+                    } catch (e: Exception) {
+                        Log.e("SyncWorker", "Failed to stage log ${local.date} for batch", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("SyncWorker", "Failed to sync log ${local.date}", e)
                 }
+                batch.commit().await()
+                if (pushedLocals.isNotEmpty()) logDao.updateAll(pushedLocals)
+                if (localDeletesToPush.isNotEmpty()) logDao.deleteAll(localDeletesToPush)
             }
 
+            // 3. Process Remote Injections (Pull to Local)
             for (remote in remoteLogs) {
                 val local = logDao.getLogById("${userId}_${remote.date}", userId)
                 if (local == null) {
@@ -215,14 +256,14 @@ class SyncWorker(
                 }
             }
 
-            // Remote Deletion Mirroring (Pruning)
+            // 4. Remote Deletion Mirroring (Pruning)
             val allLocals = logDao.getLogsImmediate(userId)
-            val syncedLocals = allLocals.filter { it.syncState == SyncState.SYNCED }
-            for (local in syncedLocals) {
-                if (!remoteMap.containsKey(local.date)) {
-                    Log.d("SyncWorker", "Pruning local log for ${local.date} as it was deleted remotely.")
-                    logDao.deleteById(local.id, userId)
-                }
+            val nodesToRemove = allLocals.filter { 
+                it.syncState == SyncState.SYNCED && !remoteMap.containsKey(it.date) 
+            }
+            if (nodesToRemove.isNotEmpty()) {
+                Log.d("SyncWorker", "Pruning ${nodesToRemove.size} logs deleted remotely.")
+                logDao.deleteAll(nodesToRemove)
             }
             true
         } catch (e: Exception) {
