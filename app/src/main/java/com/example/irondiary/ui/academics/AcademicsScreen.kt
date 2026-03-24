@@ -18,6 +18,8 @@ import com.example.irondiary.viewmodel.AuthViewModel
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 import com.example.irondiary.data.Resource
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +30,7 @@ fun AcademicsScreen() {
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val authViewModel: AuthViewModel = viewModel()
+    val sessionsResource by mainViewModel.studySessions.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -72,6 +75,13 @@ fun AcademicsScreen() {
         }
 
         item {
+            if (sessionsResource is Resource.Success) {
+                val sessions = (sessionsResource as Resource.Success).data
+                StudyTrendAnalysis(sessions = sessions)
+            }
+        }
+
+        item {
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -94,7 +104,6 @@ fun AcademicsScreen() {
         }
 
         item {
-            val sessionsResource by mainViewModel.studySessions.collectAsState()
             if (sessionsResource is Resource.Success) {
                 val sessions = (sessionsResource as Resource.Success).data
                 if (sessions.isNotEmpty()) {
@@ -114,7 +123,7 @@ fun AcademicsScreen() {
                 .take(5)
             
             items(sessions, key = { it.docId }) { session ->
-                StudySessionItem(session)
+                StudySessionItem(session, onDelete = { mainViewModel.deleteStudySession(session) })
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -122,7 +131,10 @@ fun AcademicsScreen() {
 }
 
 @Composable
-fun StudySessionItem(session: com.example.irondiary.data.model.StudySession) {
+fun StudySessionItem(
+    session: com.example.irondiary.data.model.StudySession,
+    onDelete: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -135,11 +147,21 @@ fun StudySessionItem(session: com.example.irondiary.data.model.StudySession) {
                 Text(session.subject, style = MaterialTheme.typography.titleMedium)
                 com.example.irondiary.ui.components.SyncIndicator(syncState = session.syncState)
             }
-            Text(
-                "${session.duration} hrs",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${session.duration} hrs",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete session",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }
