@@ -181,7 +181,7 @@ fun SimpleLineGraph(
             paddedMax = (maxVal + range * 0.1).let { 
                 val base = if (it.isInfinite() || it.isNaN()) 100.0 else it
                 if (maxYValue != null) base.coerceAtMost(maxYValue) else base
-            }
+            }.coerceAtLeast(paddedMin + 0.1) // Ensure paddedMax is strictly strictly greater than paddedMin
         }
         val yRange = (paddedMax - paddedMin).coerceAtLeast(0.0001)
 
@@ -278,7 +278,7 @@ fun SimpleLineGraph(
                             val tooltipHeight = bounds.height() + tooltipVPaddingPx
 
                             val tooltipX = (selectedOffset.x - tooltipWidth / 2)
-                                .coerceIn(0f, size.width - tooltipWidth)
+                                .coerceIn(0f, (size.width - tooltipWidth).coerceAtLeast(0f))
                             val tooltipY = (selectedOffset.y - tooltipHeight - tooltipYSpacingPx)
                                 .coerceAtLeast(0f)
 
@@ -382,12 +382,12 @@ class SimpleLineGraphState(
     fun onTransform(centroid: Offset, pan: Offset, zoom: Float, size: Size) {
         coroutineScope.launch {
             val newZoom = (zoomLevel.value * zoom).coerceIn(1f, 10f)
-            val oldWidth = size.width * zoomLevel.value
+            val oldWidth = (size.width * zoomLevel.value).coerceAtLeast(0.1f)
             val newWidth = size.width * newZoom
 
             val panCorrection = (centroid.x - panOffset.value) * (newWidth / oldWidth - 1)
             val newPanOffset = (panOffset.value + pan.x - panCorrection)
-            val maxPan = newWidth - size.width
+            val maxPan = (newWidth - size.width).coerceAtLeast(0f)
 
             panOffset.snapTo(newPanOffset.coerceIn(-maxPan, 0f))
             zoomLevel.snapTo(newZoom)

@@ -34,10 +34,6 @@ fun WeightGraphScreen() {
     val mainViewModel: MainViewModel = viewModel(factory = com.example.irondiary.viewmodel.MainViewModelFactory(application))
     val weightDataResource by mainViewModel.weightData.collectAsState()
 
-    LaunchedEffect(Unit) {
-        mainViewModel.fetchWeightData()
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
