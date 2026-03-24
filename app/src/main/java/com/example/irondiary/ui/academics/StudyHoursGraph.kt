@@ -111,18 +111,17 @@ private fun FilterButtons(selectedFilter: StudyFilter, onFilterSelected: (StudyF
 }
 
 private fun filterSessions(sessions: List<StudySession>, filter: StudyFilter): List<StudySession> {
-    val now = Calendar.getInstance()
     return when (filter) {
         StudyFilter.ALL -> sessions
         StudyFilter.LAST_7_DAYS -> {
-            val limit = Calendar.getInstance()
-            limit.add(Calendar.DAY_OF_YEAR, -7)
-            sessions.filter { it.date.toDate().after(limit.time) }
+            val limitDate = java.time.LocalDate.now().minusDays(7)
+            val limitMillis = limitDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            sessions.filter { it.date.toDate().time >= limitMillis }
         }
         StudyFilter.THIS_MONTH -> {
-            val limit = Calendar.getInstance()
-            limit.set(Calendar.DAY_OF_MONTH, 1)
-            sessions.filter { it.date.toDate().after(limit.time) }
+            val limitDate = java.time.LocalDate.now().withDayOfMonth(1)
+            val limitMillis = limitDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            sessions.filter { it.date.toDate().time >= limitMillis }
         }
     }
 }

@@ -127,13 +127,16 @@ class IronDiaryRepository(val context: android.content.Context) {
     }
 
     suspend fun addStudySession(session: StudySession, userId: String) {
-        if (session.subject.isBlank()) throw IllegalArgumentException("Subject cannot be empty")
-        if (session.duration <= 0 || session.duration > 24) {
+        val trimmedSubject = session.subject.trim()
+        if (trimmedSubject.isBlank()) throw IllegalArgumentException("Subject cannot be empty")
+        if (trimmedSubject.length > 100) throw IllegalArgumentException("Subject cannot exceed 100 characters")
+        if (session.duration.isNaN() || session.duration.isInfinite() || session.duration <= 0 || session.duration > 24) {
             throw IllegalArgumentException("Duration must be between 0 and 24 hours")
         }
 
         val docId = if (session.docId.isBlank()) UUID.randomUUID().toString() else session.docId
         val sessionWithId = session.copy(
+            subject = trimmedSubject,
             docId = docId,
             updatedAt = Timestamp.now()
         )

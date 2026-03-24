@@ -188,21 +188,31 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
             _saveStatus.value = Resource.Error("Subject cannot be empty.")
             return
         }
-        if (duration <= 0f || duration > 24f) {
+        if (trimmedSubject.length > 100) {
+            _saveStatus.value = Resource.Error("Subject cannot exceed 100 characters.")
+            return
+        }
+        if (duration.isNaN() || duration.isInfinite() || duration <= 0f || duration > 24f) {
             _saveStatus.value = Resource.Error("Duration must be between 0 and 24 hours.")
             return
         }
 
         val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
-        val session = StudySession(subject = trimmedSubject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
         
-        viewModelScope.launch {
+        activeSaveJobs["study_session_save"]?.cancel()
+        
+        activeSaveJobs["study_session_save"] = viewModelScope.launch {
             try {
+                val session = StudySession(subject = trimmedSubject, date = com.google.firebase.Timestamp(Date()), duration = duration.toDouble())
                 repository.addStudySession(session, userId)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
-                _saveStatus.value = Resource.Error("Failed to add study session: ${e.message}")
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _saveStatus.value = Resource.Error("Failed to add study session: ${e.message}")
+                }
+            } finally {
+                activeSaveJobs.remove("study_session_save")
             }
         }
     }

@@ -94,6 +94,8 @@ fun TopLevelNav() {
             mainViewModel.resetSaveStatus()
         } else if (saveStatus is Resource.Success) {
             mainViewModel.resetSaveStatus()
+            showLogStudySessionDialog = false
+            showLogTaskDialog = false
         }
     }
 
@@ -130,11 +132,9 @@ fun TopLevelNav() {
         LogStudySessionDialog(
             onDismiss = { showLogStudySessionDialog = false },
             onConfirm = { subject, duration ->
-                coroutineScope.launch {
-                    mainViewModel.addStudySession(subject, duration)
-                    showLogStudySessionDialog = false
-                }
-            }
+                mainViewModel.addStudySession(subject, duration)
+            },
+            isLoading = saveStatus is Resource.Loading
         )
     }
 
@@ -142,11 +142,11 @@ fun TopLevelNav() {
         TaskDialog(
             onDismiss = { showLogTaskDialog = false },
             onConfirm = { description ->
-                coroutineScope.launch {
-                    mainViewModel.addTask(description)
-                    showLogTaskDialog = false
-                }
+                mainViewModel.addTask(description)
             }
+            // If TaskDialog doesn't support isLoading yet, we rely on the dialog staying open
+            // until LaunchedEffect closes it upon Success. Adding isLoading parameter to TaskDialog
+            // would require editing it as well. We'll pass it if applicable later.
         )
     }
 
