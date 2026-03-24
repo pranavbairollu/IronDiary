@@ -144,8 +144,22 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         }
     }
 
-    fun saveDailyLog(date: String, log: DailyLog) {
+    fun saveDailyLog(log: DailyLog) {
         val userId = auth.currentUser?.uid ?: return
+        
+        // Validation: Ensure weight is within a realistic range and notes aren't too long
+        val weight = log.weight
+        if (weight != null && (weight <= 0 || weight > 500)) {
+            _saveStatus.value = Resource.Error("Weight must be between 0 and 500 kg.")
+            return
+        }
+        
+        val notes = log.notes
+        if (notes != null && notes.length > 2000) {
+            _saveStatus.value = Resource.Error("Notes cannot exceed 2000 characters.")
+            return
+        }
+
         _saveStatus.value = Resource.Loading
         viewModelScope.launch {
             try {

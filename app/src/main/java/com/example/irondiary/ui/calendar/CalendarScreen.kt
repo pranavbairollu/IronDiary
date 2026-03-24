@@ -42,6 +42,16 @@ fun CalendarScreen() {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var showBottomSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Observe save status for error feedback
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    LaunchedEffect(saveStatus) {
+        if (saveStatus is Resource.Error) {
+            snackbarHostState.showSnackbar((saveStatus as Resource.Error).message)
+            mainViewModel.resetSaveStatus()
+        }
+    }
 
     val daysInMonth = remember(currentMonth) {
         val startDay = currentMonth.atDay(1)
@@ -51,66 +61,71 @@ fun CalendarScreen() {
         List(firstDayOfWeek) { null } + (1..endDay.dayOfMonth).map { currentMonth.atDay(it) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .navigationBarsPadding()
-    ) {
-        CalendarHeader(
-            currentMonth = currentMonth,
-            onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
-            onNextMonth = { currentMonth = currentMonth.plusMonths(1) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        DayLabels()
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            modifier = Modifier.weight(1f)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        modifier = Modifier.fillMaxSize()
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
         ) {
-            items(daysInMonth) { date ->
-                if (date != null) {
-                    val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                    val log = when (val res = dailyLogsResource) {
-                        is Resource.Success -> res.data[dateId]
-                        else -> null
-                    }
-                    val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
-
-                    CalendarDay(
-                        date = date,
-                        isSelected = date == selectedDate,
-                        hasLog = log != null,
-                        syncState = syncState,
-                        onDateClick = {
-                            selectedDate = date
-                            showBottomSheet = true
-                        }
-                    )
-                } else {
-                    Box(modifier = Modifier.aspectRatio(1f))
-                }
-            }
-        }
-
-        if (showBottomSheet && selectedDate != null) {
-            val dateId = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val log = when (val res = dailyLogsResource) {
-                is Resource.Success -> res.data[dateId] ?: DailyLog(date = dateId)
-                else -> DailyLog(date = dateId)
-            }
-
-            DailyLogBottomSheet(
-                log = log,
-                onDismiss = { showBottomSheet = false },
-                onSave = { updatedLog ->
-                    mainViewModel.saveDailyLog(dateId, updatedLog)
-                    showBottomSheet = false
-                }
+            CalendarHeader(
+                currentMonth = currentMonth,
+                onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
+                onNextMonth = { currentMonth = currentMonth.plusMonths(1) }
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            DayLabels()
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(7),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(daysInMonth) { date ->
+                    if (date != null) {
+                        val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                        val log = when (val res = dailyLogsResource) {
+                            is Resource.Success -> res.data[dateId]
+                            else -> null
+                        }
+                        val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
+
+                        CalendarDay(
+                            date = date,
+                            isSelected = date == selectedDate,
+                            hasLog = log != null,
+                            syncState = syncState,
+                            onDateClick = {
+                                selectedDate = date
+                                showBottomSheet = true
+                            }
+                        )
+                    } else {
+                        Box(modifier = Modifier.aspectRatio(1f))
+                    }
+                }
+            }
+
+            if (showBottomSheet && selectedDate != null) {
+                val dateId = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                val log = when (val res = dailyLogsResource) {
+                    is Resource.Success -> res.data[dateId] ?: DailyLog(date = dateId)
+                    else -> DailyLog(date = dateId)
+                }
+
+                DailyLogBottomSheet(
+                    log = log,
+                    onDismiss = { showBottomSheet = false },
+                    onSave = { updatedLog ->
+                        mainViewModel.saveDailyLog(updatedLog)
+                        showBottomSheet = false
+                    }
+                )
+            }
         }
     }
 }
@@ -225,6 +240,13 @@ fun DailyLogBottomSheet(
     var attendedGym by remember { mutableStateOf(log.attendedGym) }
     var weight by remember { mutableStateOf(log.weight?.toString() ?: "") }
     var notes by remember { mutableStateOf(log.notes ?: "") }
+    
+    val isWeightValid = remember(weight) {
+        if (weight.isEmpty()) true
+        else weight.toFloatOrNull()?.let { it > 0 && it <= 500 } ?: false
+    }
+    
+    val isNotesValid = notes.length <= 2000
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -248,29 +270,48 @@ fun DailyLogBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = weight,
-                onValueChange = { weight = it },
+                onValueChange = { if (it.length <= 10) weight = it },
                 label = { Text("Weight (kg)") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                isError = !isWeightValid,
+                supportingText = {
+                    if (!isWeightValid) {
+                        Text("Please enter a valid weight (0-500kg)")
+                    }
+                },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                ),
+                singleLine = true
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = notes,
-                onValueChange = { notes = it },
+                onValueChange = { if (it.length <= 2100) notes = it },
                 label = { Text("Notes") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 3
+                minLines = 3,
+                isError = !isNotesValid,
+                supportingText = {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Text("${notes.length}/2000", color = if (isNotesValid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    onSave(log.copy(
-                        attendedGym = attendedGym,
-                        weight = weight.toFloatOrNull(),
-                        notes = notes.takeIf { it.isNotBlank() }
-                    ))
+                    if (isWeightValid && isNotesValid) {
+                        onSave(log.copy(
+                            attendedGym = attendedGym,
+                            weight = weight.toFloatOrNull(),
+                            notes = notes.trim().takeIf { it.isNotBlank() }
+                        ))
+                    }
                 },
+                enabled = isWeightValid && isNotesValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Save Log")

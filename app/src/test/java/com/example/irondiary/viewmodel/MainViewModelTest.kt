@@ -117,13 +117,53 @@ class MainViewModelTest {
     }
 
     @Test
-    fun repository_addTask_throwsOnBlankDescription() = runTest {
+    fun saveDailyLog_invalidWeight_emitsError() = runTest {
+        val invalidLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = -10f)
+        viewModel.saveStatus.test {
+            assertNull(awaitItem())
+            viewModel.saveDailyLog(invalidLog)
+            val errorState = awaitItem()
+            assertTrue(errorState is Resource.Error)
+            assertEquals("Weight must be between 0 and 500 kg.", (errorState as Resource.Error).message)
+            coVerify(exactly = 0) { repositoryMock.saveDailyLog(any(), any()) }
+        }
+    }
+
+    @Test
+    fun saveDailyLog_longNotes_emitsError() = runTest {
+        val longNotes = "a".repeat(2001)
+        val invalidLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", notes = longNotes)
+        viewModel.saveStatus.test {
+            assertNull(awaitItem())
+            viewModel.saveDailyLog(invalidLog)
+            val errorState = awaitItem()
+            assertTrue(errorState is Resource.Error)
+            assertEquals("Notes cannot exceed 2000 characters.", (errorState as Resource.Error).message)
+            coVerify(exactly = 0) { repositoryMock.saveDailyLog(any(), any()) }
+        }
+    }
+
+    @Test
+    fun saveDailyLog_validInput_emitsSuccess() = runTest {
+        val validLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 75f, notes = "Feeling good")
+        viewModel.saveStatus.test {
+            assertNull(awaitItem())
+            viewModel.saveDailyLog(validLog)
+            assertEquals(Resource.Loading, awaitItem())
+            assertEquals(Resource.Success(Unit), awaitItem())
+            coVerify(exactly = 1) { repositoryMock.saveDailyLog(any(), "test_uid") }
+        }
+    }
+
+    @Test
+    fun repository_saveDailyLog_throwsOnInvalidWeight() = runTest {
         val repo = IronDiaryRepository(applicationMock)
+        val invalidLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 600f)
         try {
-            repo.addTask("uid", "  ")
+            repo.saveDailyLog(invalidLog, "uid")
             assertTrue("Should have thrown IllegalArgumentException", false)
         } catch (e: IllegalArgumentException) {
-            assertEquals("Task description cannot be empty", e.message)
+            assertEquals("Weight must be between 0 and 500 kg", e.message)
         }
     }
 }

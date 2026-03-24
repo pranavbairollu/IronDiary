@@ -164,6 +164,14 @@ class IronDiaryRepository(val context: android.content.Context) {
     }
 
     suspend fun saveDailyLog(log: DailyLog, userId: String) {
+        // Repository level validation as a safety net
+        if (log.weight != null && (log.weight <= 0 || log.weight > 500)) {
+            throw IllegalArgumentException("Weight must be between 0 and 500 kg")
+        }
+        if (log.notes != null && log.notes.length > 2000) {
+            throw IllegalArgumentException("Notes too long")
+        }
+
         val logWithUpdate = log.copy(updatedAt = Timestamp.now())
         dailyLogDao.insert(logWithUpdate.toEntity(userId, SyncState.PENDING))
         enqueueSync()
