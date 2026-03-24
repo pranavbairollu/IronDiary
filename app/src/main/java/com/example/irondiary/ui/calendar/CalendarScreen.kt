@@ -119,6 +119,7 @@ fun CalendarScreen() {
 
                 DailyLogBottomSheet(
                     log = log,
+                    saveStatus = saveStatus,
                     onDismiss = { showBottomSheet = false },
                     onSave = { updatedLog ->
                         mainViewModel.saveDailyLog(updatedLog)
@@ -234,12 +235,15 @@ fun CalendarDay(
 @Composable
 fun DailyLogBottomSheet(
     log: DailyLog,
+    saveStatus: Resource<Unit>?,
     onDismiss: () -> Unit,
     onSave: (DailyLog) -> Unit
 ) {
     var attendedGym by remember { mutableStateOf(log.attendedGym) }
     var weight by remember { mutableStateOf(log.weight?.toString() ?: "") }
     var notes by remember { mutableStateOf(log.notes ?: "") }
+    
+    val isSaving = saveStatus is Resource.Loading
     
     val isWeightValid = remember(weight) {
         if (weight.isEmpty()) true
@@ -311,10 +315,18 @@ fun DailyLogBottomSheet(
                         ))
                     }
                 },
-                enabled = isWeightValid && isNotesValid,
+                enabled = isWeightValid && isNotesValid && !isSaving,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save Log")
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Save Log")
+                }
             }
             Spacer(modifier = Modifier.height(32.dp))
         }

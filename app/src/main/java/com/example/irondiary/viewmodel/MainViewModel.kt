@@ -52,6 +52,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     
     // Map to keep track of active toggle jobs per taskId to prevent rapid UI toggling floods
     private val activeToggleJobs = mutableMapOf<String, Job>()
+    
+    // Map to keep track of active save jobs per date to prevent redundant save floods
+    private val activeSaveJobs = mutableMapOf<String, Job>()
 
     init {
         fetchDailyLogs()
@@ -161,12 +164,20 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         }
 
         _saveStatus.value = Resource.Loading
-        viewModelScope.launch {
+        
+        // Cancel any existing save job for this specific date
+        activeSaveJobs[log.date]?.cancel()
+        
+        activeSaveJobs[log.date] = viewModelScope.launch {
             try {
                 repository.saveDailyLog(log, userId)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
-                _saveStatus.value = Resource.Error("Failed to save daily log: ${e.message}")
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _saveStatus.value = Resource.Error("Failed to save daily log: ${e.message}")
+                }
+            } finally {
+                activeSaveJobs.remove(log.date)
             }
         }
     }
@@ -356,5 +367,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         weightDataJob?.cancel()
         studySessionsJob?.cancel()
         tasksJob?.cancel()
+        activeToggleJobs.values.forEach { it.cancel() }
+        activeSaveJobs.values.forEach { it.cancel() }
     }
 }

@@ -156,6 +156,51 @@ class MainViewModelTest {
     }
 
     @Test
+    fun saveDailyLog_boundaryValues_emitsSuccess() = runTest {
+        viewModel.saveStatus.test {
+            assertNull(awaitItem())
+
+            // Test lower boundary: 0.1 kg
+            val lowerBoundaryLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 0.1f)
+            viewModel.saveDailyLog(lowerBoundaryLog)
+            assertEquals(Resource.Loading, awaitItem())
+            assertEquals(Resource.Success(Unit), awaitItem())
+
+            // Test upper boundary: 500.0 kg
+            val upperBoundaryLog = com.example.irondiary.data.DailyLog(date = "2026-03-25", weight = 500.0f)
+            viewModel.saveDailyLog(upperBoundaryLog)
+            assertEquals(Resource.Loading, awaitItem())
+            assertEquals(Resource.Success(Unit), awaitItem())
+
+            // Test exactly 2000 characters
+            val exactNotes = "a".repeat(2000)
+            val boundaryNotesLog = com.example.irondiary.data.DailyLog(date = "2026-03-26", notes = exactNotes)
+            viewModel.saveDailyLog(boundaryNotesLog)
+            assertEquals(Resource.Loading, awaitItem())
+            assertEquals(Resource.Success(Unit), awaitItem())
+        }
+    }
+
+    @Test
+    fun saveDailyLog_concurrentCalls_cancelsPreviousJob() = runTest {
+        val log1 = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 70f)
+        val log2 = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 75f)
+
+        // Start first save
+        viewModel.saveDailyLog(log1)
+        
+        // Start second save immediately for the same date
+        viewModel.saveDailyLog(log2)
+
+        // Advance time to allow completion
+        testScheduler.runCurrent()
+
+        // Verify repository was called for the SECOND log
+        coVerify(exactly = 1) { repositoryMock.saveDailyLog(log2, "test_uid") }
+        // The first call might have been cancelled before reaching the repository or overwritten
+    }
+
+    @Test
     fun repository_saveDailyLog_throwsOnInvalidWeight() = runTest {
         val repo = IronDiaryRepository(applicationMock)
         val invalidLog = com.example.irondiary.data.DailyLog(date = "2026-03-24", weight = 600f)
