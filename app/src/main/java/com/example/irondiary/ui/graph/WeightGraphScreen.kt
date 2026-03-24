@@ -89,12 +89,24 @@ fun WeightGraph(weightData: List<DailyLog>) {
 
     if (validWeightData.size < 2) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Not enough data to display a graph.")
-            Text("Log your weight on multiple days to see your progress.")
+            Text(
+                text = "Log your weight on multiple days to see your trend.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Progress visualization requires at least 2 entries.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     } else {
         val weightValues = remember(validWeightData) {
@@ -102,12 +114,25 @@ fun WeightGraph(weightData: List<DailyLog>) {
         }
 
         val dateLabels = remember(validWeightData) {
+            val isoFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+            val displayFormatter = DateTimeFormatter.ofPattern("MMM dd")
             validWeightData.map {
                 try {
-                    LocalDate.parse(it.date, DateTimeFormatter.ISO_LOCAL_DATE)
-                        .format(DateTimeFormatter.ofPattern("MMM dd"))
+                    LocalDate.parse(it.date, isoFormatter).format(displayFormatter)
                 } catch (e: Exception) {
-                    it.date // fallback if parsing fails
+                    it.date
+                }
+            }
+        }
+
+        val tooltipLabels = remember(validWeightData) {
+            val isoFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+            val fullFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
+            validWeightData.map {
+                try {
+                    LocalDate.parse(it.date, isoFormatter).format(fullFormatter)
+                } catch (e: Exception) {
+                    it.date
                 }
             }
         }
@@ -116,9 +141,14 @@ fun WeightGraph(weightData: List<DailyLog>) {
             dataPoints = weightValues,
             labels = dateLabels,
             modifier = Modifier.fillMaxSize(),
-            tooltipFormatter = { value, label -> "${String.format("%.1f", value)} kgs on $label" },
+            tooltipFormatter = { value, label -> 
+                val index = weightValues.indexOf(value)
+                val fullDate = if (index != -1) tooltipLabels[index] else label
+                "${String.format("%.1f", value)} kgs on $fullDate" 
+            },
             lineColor = MaterialTheme.colorScheme.tertiary,
-            fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
+            fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+            minYValue = 0.0
         )
     }
 }

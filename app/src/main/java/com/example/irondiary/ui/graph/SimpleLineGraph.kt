@@ -81,7 +81,16 @@ fun SimpleLineGraph(
     xAxisTextColor: Color = MaterialTheme.colorScheme.onSurface,
     xAxisTextSize: Float = 32f,
     xAxisLabelVerticalOffset: Dp = 50.dp,
-    gridLineColor: Color = yAxisTextColor.copy(alpha = 0.2f)
+    gridLineColor: Color = yAxisTextColor.copy(alpha = 0.2f),
+    minYValue: Double? = null,
+    maxYValue: Double? = null,
+    yAxisLabelFormatter: (Double) -> String = { value ->
+        if (value == value.toInt().toDouble()) {
+            value.toInt().toString()
+        } else {
+            String.format("%.1f", value)
+        }
+    }
 ) {
     require(dataPoints.size == labels.size) { "dataPoints and labels must have the same size." }
 
@@ -126,7 +135,11 @@ fun SimpleLineGraph(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { state.onDoubleTap() },
-                    onTap = { state.onTap(it, size.toSize()) }
+                    onTap = { 
+                        if (animationProgress.value >= 0.9f) {
+                            state.onTap(it, size.toSize()) 
+                        }
+                    }
                 )
             }
             .pointerInput(Unit) {
@@ -157,14 +170,20 @@ fun SimpleLineGraph(
         val paddedMax: Double
 
         if (maxVal == minVal) {
-            paddedMin = minVal - 1.0
-            paddedMax = maxVal + 1.0
+            paddedMin = (minYValue ?: (minVal - 1.0)).coerceAtLeast(minYValue ?: -Double.MAX_VALUE)
+            paddedMax = (maxYValue ?: (maxVal + 1.0)).coerceAtMost(maxYValue ?: Double.MAX_VALUE)
         } else {
             val range = (maxVal - minVal)
-            paddedMin = (minVal - range * 0.1).let { if (it.isInfinite() || it.isNaN()) 0.0 else it }
-            paddedMax = (maxVal + range * 0.1).let { if (it.isInfinite() || it.isNaN()) 100.0 else it }
+            paddedMin = (minVal - range * 0.1).let { 
+                val base = if (it.isInfinite() || it.isNaN()) 0.0 else it
+                if (minYValue != null) base.coerceAtLeast(minYValue) else base
+            }
+            paddedMax = (maxVal + range * 0.1).let { 
+                val base = if (it.isInfinite() || it.isNaN()) 100.0 else it
+                if (maxYValue != null) base.coerceAtMost(maxYValue) else base
+            }
         }
-        val yRange = (paddedMax - paddedMin).coerceAtLeast(1.0)
+        val yRange = (paddedMax - paddedMin).coerceAtLeast(0.0001)
 
         val yAxisLabelCount = 5
         val yAxisLabelPaddingPx = yAxisLabelPadding.toPx()
@@ -173,7 +192,7 @@ fun SimpleLineGraph(
             val y = height - (i * height / (yAxisLabelCount - 1))
             drawLine(gridLineColor, start = Offset(0f, y), end = Offset(width, y))
             drawContext.canvas.nativeCanvas.drawText(
-                value.roundToInt().toString(),
+                yAxisLabelFormatter(value),
                 -yAxisLabelPaddingPx,
                 y + yAxisTextSize / 3,
                 yAxisPaint
