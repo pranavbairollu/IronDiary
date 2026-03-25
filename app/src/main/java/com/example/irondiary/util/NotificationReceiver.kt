@@ -34,7 +34,7 @@ class NotificationReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Log Your Day")
             .setContentText("Don't forget to log your activities for the day!")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
