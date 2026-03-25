@@ -34,15 +34,16 @@ class NotificationReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with your app icon
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Log Your Day")
             .setContentText("Don't forget to log your activities for the day!")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
         notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
+        Log.d("NotificationReceiver", "Daily reminder notification posted.")
 
         // Reschedule the alarm for the next day, crucial for exact alarms that don't repeat automatically
         NotificationHelper.scheduleDailyReminder(context)
