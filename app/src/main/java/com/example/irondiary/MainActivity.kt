@@ -24,23 +24,13 @@ import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (!isGranted) {
-            Toast.makeText(
-                this,
-                "Notifications are disabled. You will not receive daily reminders.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.createNotificationChannel(this)
-        NotificationHelper.scheduleDailyReminder(this)
-        askForNotificationPermission()
+        
+        // Removed unconditional request for POST_NOTIFICATIONS and scheduling.
+        // Handled securely via user settings toggle.
 
         setContent {
             IronDiaryTheme {
@@ -54,12 +44,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun askForNotificationPermission() {
-        if (!NotificationHelper.hasNotificationPermission(this)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Consider showing a custom dialog explaining why the permission is needed
-                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-    }
 }

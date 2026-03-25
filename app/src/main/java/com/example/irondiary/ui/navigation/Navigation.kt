@@ -14,6 +14,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -43,6 +46,7 @@ import com.example.irondiary.viewmodel.AuthViewModel
 import com.example.irondiary.viewmodel.AuthViewModelFactory
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
+import com.example.irondiary.ui.components.SettingsDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -77,12 +81,14 @@ fun AppNavigation() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopLevelNav() {
     val navController = rememberNavController()
     var showLogChoiceDialog by remember { mutableStateOf(false) }
     var showLogStudySessionDialog by remember { mutableStateOf(false) }
-    var showLogTaskDialog by remember { mutableStateOf(false) } // Renamed logic-wise, but keep variable name for simplicity if preferred, or rename it too
+    var showLogTaskDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     val application = LocalContext.current.applicationContext as Application
@@ -152,7 +158,24 @@ fun TopLevelNav() {
         )
     }
 
+    if (showSettingsDialog) {
+        SettingsDialog(
+            mainViewModel = mainViewModel,
+            onDismiss = { showSettingsDialog = false }
+        )
+    }
+
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("IronDiary") },
+                actions = {
+                    androidx.compose.material3.IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()

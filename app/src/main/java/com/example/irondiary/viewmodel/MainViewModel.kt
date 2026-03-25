@@ -42,6 +42,11 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _tasks = MutableStateFlow<Resource<List<Task>>>(Resource.Success(emptyList()))
     val tasks: StateFlow<Resource<List<Task>>> = _tasks.asStateFlow()
 
+    private val _isDailyReminderEnabled = MutableStateFlow(
+        sharedPreferences.getBoolean("daily_reminders_enabled", false) // Default to false
+    )
+    val isDailyReminderEnabled: StateFlow<Boolean> = _isDailyReminderEnabled.asStateFlow()
+
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
 
@@ -369,6 +374,17 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
     fun resetSaveStatus() {
         _saveStatus.value = null
+    }
+
+    fun toggleDailyReminder(enabled: Boolean, context: Context) {
+        sharedPreferences.edit().putBoolean("daily_reminders_enabled", enabled).apply()
+        _isDailyReminderEnabled.value = enabled
+        
+        if (enabled) {
+            com.example.irondiary.util.NotificationHelper.scheduleDailyReminder(context)
+        } else {
+            com.example.irondiary.util.NotificationHelper.cancelDailyReminder(context)
+        }
     }
 
     override fun onCleared() {

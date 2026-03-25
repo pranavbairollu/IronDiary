@@ -43,11 +43,21 @@ object NotificationHelper {
         }
     }
 
+    fun isDailyReminderEnabled(context: Context): Boolean {
+        val sharedPreferences = context.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("daily_reminders_enabled", false)
+    }
+
     fun scheduleDailyReminder(
         context: Context, 
         now: Long = System.currentTimeMillis(),
         calendar: Calendar = Calendar.getInstance()
     ) {
+        if (!isDailyReminderEnabled(context)) {
+            cancelDailyReminder(context)
+            return
+        }
+
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, NotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
