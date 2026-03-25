@@ -205,4 +205,16 @@ class IronDiaryRepository(val context: android.content.Context) {
             syncRequest
         )
     }
+
+    /**
+     * Completely wipes the local Room database and SharedPreferences.
+     * This is intended for explicit user sign-out to guarantee no personal data
+     * is left lingering on a potentially shared device.
+     */
+    suspend fun clearAllLocalData() {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            db.clearAllTables()
+            context.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+        }
+    }
 }

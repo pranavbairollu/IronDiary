@@ -2,6 +2,7 @@ package com.example.irondiary.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.irondiary.data.repository.IronDiaryRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -21,28 +22,45 @@ sealed class AuthUiState {
     object PasswordResetEmailSent : AuthUiState()
 }
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel(private val repository: IronDiaryRepository? = null) : ViewModel() {
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-    init {
-        auth.currentUser?.let {
-            _uiState.value = AuthUiState.Success(it)
+    private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val user = firebaseAuth.currentUser
+        if (user != null) {
+            _uiState.value = AuthUiState.Success(user)
+        } else {
+            // If the user was previously logged in (Success state) and is now null,
+            // their session expired or they were remotely signed out.
+            if (_uiState.value is AuthUiState.Success) {
+                _uiState.value = AuthUiState.Idle
+            }
         }
     }
 
+    init {
+        auth.addAuthStateListener(authStateListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authStateListener)
+    }
+
     fun sendPasswordResetEmail(email: String) {
-        if (!isValidEmail(email)) {
+        val trimmedEmail = email.trim()
+        if (!isValidEmail(trimmedEmail)) {
             _uiState.value = AuthUiState.Error("Please enter a valid email address.")
             return
         }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
-                auth.sendPasswordResetEmail(email).await()
+                auth.sendPasswordResetEmail(trimmedEmail).await()
                 _uiState.value = AuthUiState.PasswordResetEmailSent
             } catch (e: FirebaseAuthException) {
                 _uiState.value = AuthUiState.Error(mapFirebaseError(e))
@@ -55,7 +73,8 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signIn(email: String, password: String) {
-        if (!isValidEmail(email)) {
+        val trimmedEmail = email.trim()
+        if (!isValidEmail(trimmedEmail)) {
             _uiState.value = AuthUiState.Error("Please enter a valid email address.")
             return
         }
@@ -66,7 +85,7 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
-                val result = auth.signInWithEmailAndPassword(email, password).await()
+                val result = auth.signInWithEmailAndPassword(trimmedEmail, password).await()
                 result.user?.let {
                     _uiState.value = AuthUiState.Success(it)
                 }
@@ -83,7 +102,8 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signUp(email: String, password: String) {
-        if (!isValidEmail(email)) {
+        val trimmedEmail = email.trim()
+        if (!isValidEmail(trimmedEmail)) {
             _uiState.value = AuthUiState.Error("Please enter a valid email address.")
             return
         }
@@ -94,7 +114,7 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             try {
-                val result = auth.createUserWithEmailAndPassword(email, password).await()
+                val result = auth.createUserWithEmailAndPassword(trimmedEmail, password).await()
                 result.user?.let {
                     _uiState.value = AuthUiState.Success(it)
                 }
@@ -109,8 +129,13 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signOut() {
-        auth.signOut()
-        _uiState.value = AuthUiState.Idle
+        viewModelScope.launch {
+            // Optional: Set to loading if you want a visual indicator while clearing DB
+            _uiState.value = AuthUiState.Loading 
+            repository?.clearAllLocalData()
+            auth.signOut()
+            _uiState.value = AuthUiState.Idle
+        }
     }
 
     fun resetAuthState() {

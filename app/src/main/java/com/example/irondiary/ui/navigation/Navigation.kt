@@ -40,13 +40,15 @@ import com.example.irondiary.ui.calendar.CalendarScreen
 import com.example.irondiary.ui.graph.WeightGraphScreen
 import com.example.irondiary.viewmodel.AuthUiState
 import com.example.irondiary.viewmodel.AuthViewModel
+import com.example.irondiary.viewmodel.AuthViewModelFactory
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavigation() {
-    val authViewModel: AuthViewModel = viewModel()
+    val application = LocalContext.current.applicationContext as Application
+    val authViewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(application))
     val uiState by authViewModel.uiState.collectAsState()
     val navController = rememberNavController()
 

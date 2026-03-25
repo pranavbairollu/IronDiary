@@ -43,6 +43,12 @@ class AuthViewModelTest {
         // Ensure initial currentUser is null by default so it starts in Idle state
         every { authMock.currentUser } returns null
 
+        // Mock addAuthStateListener to immediately invoke the listener, simulating real behavior
+        every { authMock.addAuthStateListener(any()) } answers {
+            val listener = firstArg<FirebaseAuth.AuthStateListener>()
+            listener.onAuthStateChanged(authMock)
+        }
+
         viewModel = AuthViewModel()
     }
 

@@ -1,5 +1,6 @@
 package com.example.irondiary.ui.auth
 
+import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,13 +34,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.viewmodel.AuthUiState
 import com.example.irondiary.viewmodel.AuthViewModel
+import com.example.irondiary.viewmodel.AuthViewModelFactory
 
 @Composable
 fun AuthScreen(onSignIn: () -> Unit) {
-    val authViewModel: AuthViewModel = viewModel()
+    val application = LocalContext.current.applicationContext as Application
+    val authViewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(application))
     val uiState by authViewModel.uiState.collectAsState()
 
     var email by remember { mutableStateOf("") }
