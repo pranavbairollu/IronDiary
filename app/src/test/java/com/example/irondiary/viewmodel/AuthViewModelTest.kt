@@ -67,6 +67,21 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun signIn_invalidEmail_emitsError() = runTest {
+        viewModel.uiState.test {
+            assertEquals(AuthUiState.Idle, awaitItem())
+            
+            viewModel.signIn("invalid-email", "password")
+            
+            val errorState = awaitItem()
+            assertTrue(errorState is AuthUiState.Error)
+            assertEquals("Please enter a valid email address.", (errorState as AuthUiState.Error).message)
+            
+            verify(exactly = 0) { authMock.signInWithEmailAndPassword(any(), any()) }
+        }
+    }
+
+    @Test
     fun signIn_blankInput_emitsErrorWithoutFirebaseCall() = runTest {
         viewModel.uiState.test {
             assertEquals(AuthUiState.Idle, awaitItem())
@@ -75,7 +90,7 @@ class AuthViewModelTest {
             
             val errorState = awaitItem()
             assertTrue(errorState is AuthUiState.Error)
-            assertEquals("Email and password cannot be empty.", (errorState as AuthUiState.Error).message)
+            assertEquals("Please enter a valid email address.", (errorState as AuthUiState.Error).message)
             
             // Verify no interaction with Firebase
             verify(exactly = 0) { authMock.signInWithEmailAndPassword(any(), any()) }
@@ -154,6 +169,34 @@ class AuthViewModelTest {
     }
     
     @Test
+    fun signUp_invalidEmail_emitsError() = runTest {
+        viewModel.uiState.test {
+            assertEquals(AuthUiState.Idle, awaitItem())
+            
+            viewModel.signUp("invalid-email", "password123")
+            
+            val errorState = awaitItem()
+            assertTrue(errorState is AuthUiState.Error)
+            assertEquals("Please enter a valid email address.", (errorState as AuthUiState.Error).message)
+            verify(exactly = 0) { authMock.createUserWithEmailAndPassword(any(), any()) }
+        }
+    }
+
+    @Test
+    fun signUp_shortPassword_emitsError() = runTest {
+        viewModel.uiState.test {
+            assertEquals(AuthUiState.Idle, awaitItem())
+            
+            viewModel.signUp("test@example.com", "12345")
+            
+            val errorState = awaitItem()
+            assertTrue(errorState is AuthUiState.Error)
+            assertEquals("Password must be at least 6 characters.", (errorState as AuthUiState.Error).message)
+            verify(exactly = 0) { authMock.createUserWithEmailAndPassword(any(), any()) }
+        }
+    }
+
+    @Test
     fun signUp_blankInput_emitsErrorWithoutFirebaseCall() = runTest {
         viewModel.uiState.test {
             assertEquals(AuthUiState.Idle, awaitItem())
@@ -162,7 +205,7 @@ class AuthViewModelTest {
             
             val errorState = awaitItem()
             assertTrue(errorState is AuthUiState.Error)
-            assertEquals("Email and password cannot be empty.", (errorState as AuthUiState.Error).message)
+            assertEquals("Password must be at least 6 characters.", (errorState as AuthUiState.Error).message)
             verify(exactly = 0) { authMock.createUserWithEmailAndPassword(any(), any()) }
         }
     }
@@ -200,7 +243,7 @@ class AuthViewModelTest {
             
             val errorState = awaitItem()
             assertTrue(errorState is AuthUiState.Error)
-            assertEquals("Email cannot be empty.", (errorState as AuthUiState.Error).message)
+            assertEquals("Please enter a valid email address.", (errorState as AuthUiState.Error).message)
             verify(exactly = 0) { authMock.sendPasswordResetEmail(any()) }
         }
     }

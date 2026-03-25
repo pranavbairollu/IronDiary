@@ -8,9 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.viewmodel.AuthUiState
@@ -38,6 +44,7 @@ fun AuthScreen(onSignIn: () -> Unit) {
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
@@ -78,33 +85,52 @@ fun AuthScreen(onSignIn: () -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { 
+                email = it
+                if (uiState is AuthUiState.Error) authViewModel.resetAuthState()
+            },
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = uiState is AuthUiState.Error
+            isError = uiState is AuthUiState.Error && (uiState as AuthUiState.Error).message.contains("email", ignoreCase = true)
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { 
+                password = it
+                if (uiState is AuthUiState.Error) authViewModel.resetAuthState()
+            },
             label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                val description = if (passwordVisible) "Hide password" else "Show password"
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(imageVector = image, contentDescription = description)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = uiState is AuthUiState.Error
+            isError = uiState is AuthUiState.Error && (uiState as AuthUiState.Error).message.contains("password", ignoreCase = true)
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        if (uiState is AuthUiState.Error) {
+            Text(
+                text = (uiState as AuthUiState.Error).message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.Start)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         when (uiState) {
             is AuthUiState.Loading -> {
                 CircularProgressIndicator()
-            }
-            is AuthUiState.Error -> {
-                val errorMessage = (uiState as AuthUiState.Error).message
-                Text(errorMessage, color = MaterialTheme.colorScheme.error)
-                Spacer(modifier = Modifier.height(16.dp))
-                AuthButtons(email, password, authViewModel) { showForgotPasswordDialog = true }
             }
             else -> {
                 AuthButtons(email, password, authViewModel) { showForgotPasswordDialog = true }

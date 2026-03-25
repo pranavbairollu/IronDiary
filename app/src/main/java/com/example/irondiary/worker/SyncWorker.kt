@@ -36,7 +36,11 @@ class SyncWorker(
      * Entry point for the work manager. Executes the sync tasks sequentially for all domains.
      */
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return@withContext Result.failure()
+        val userId = FirebaseAuth.getInstance().currentUser?.uid
+        if (userId == null) {
+            Log.w("SyncWorker", "User not authenticated. Sync aborted.")
+            return@withContext Result.failure()
+        }
         val db = IronDiaryDatabase.getDatabase(applicationContext)
         val firestore = FirebaseFirestore.getInstance()
 
