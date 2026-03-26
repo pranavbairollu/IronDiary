@@ -23,12 +23,10 @@ import androidx.compose.material.icons.filled.History
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AcademicsScreen() {
+fun AcademicsScreen(mainViewModel: MainViewModel) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Pending", "Completed")
 
-    val application = LocalContext.current.applicationContext as Application
-    val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val authViewModel: AuthViewModel = viewModel()
     val sessionsResource by mainViewModel.studySessions.collectAsState()
 
@@ -116,14 +114,16 @@ fun AcademicsScreen() {
             }
         }
 
-        val sessionsResourceSnapshot = mainViewModel.studySessions.value
-        if (sessionsResourceSnapshot is Resource.Success) {
-            val sessions = sessionsResourceSnapshot.data
+        if (sessionsResource is Resource.Success) {
+            val sessions = (sessionsResource as Resource.Success).data
                 .sortedByDescending { it.updatedAt }
                 .take(5)
             
             items(sessions, key = { it.docId }) { session ->
-                StudySessionItem(session, onDelete = { mainViewModel.deleteStudySession(session) })
+                StudySessionItem(session, onDelete = { 
+                    android.util.Log.d("AcademicsScreen", "Deleting session: ${session.docId} - ${session.subject}")
+                    mainViewModel.deleteStudySession(session) 
+                })
                 Spacer(Modifier.height(8.dp))
             }
         }

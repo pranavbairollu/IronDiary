@@ -224,15 +224,22 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
     fun deleteStudySession(session: StudySession) {
         val docId = session.docId
-        if (docId.isEmpty()) return
+        if (docId.isEmpty()) {
+            Log.e("MainViewModel", "Cannot delete study session with empty docId: ${session.subject}")
+            _saveStatus.value = Resource.Error("Logic Error: Missing Session ID. Please refresh.")
+            return
+        }
 
         val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
         viewModelScope.launch {
             try {
+                Log.d("MainViewModel", "Initiating deletion of session $docId for user $userId")
                 repository.deleteStudySession(docId, userId)
                 _saveStatus.value = Resource.Success(Unit)
+                Log.d("MainViewModel", "Successfully marked session $docId as deleted")
             } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed to delete study session $docId", e)
                 _saveStatus.value = Resource.Error("Failed to delete study session: ${e.message}")
             }
         }

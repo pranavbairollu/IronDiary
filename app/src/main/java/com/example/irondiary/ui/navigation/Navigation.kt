@@ -232,7 +232,7 @@ fun TopLevelNav() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Calendar.route) { CalendarScreen() }
-            composable(Screen.Academics.route) { AcademicsScreen() }
+            composable(Screen.Academics.route) { AcademicsScreen(mainViewModel) }
             composable(Screen.Graph.route) { WeightGraphScreen() }
         }
     }
