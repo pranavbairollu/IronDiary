@@ -15,8 +15,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +42,7 @@ import com.example.irondiary.ui.academics.AcademicsScreen
 import com.example.irondiary.ui.academics.LogStudySessionDialog
 import com.example.irondiary.ui.academics.TaskDialog
 import com.example.irondiary.ui.auth.AuthScreen
+import com.example.irondiary.ui.auth.SplashScreen
 import com.example.irondiary.ui.calendar.CalendarScreen
 import com.example.irondiary.ui.graph.WeightGraphScreen
 import com.example.irondiary.viewmodel.AuthUiState
@@ -64,19 +68,31 @@ fun AppNavigation() {
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = if (uiState is AuthUiState.Success) "main" else "auth"
-    ) {
-        composable("auth") {
-            AuthScreen(onSignIn = {
-                navController.navigate("main") {
-                    popUpTo("auth") { inclusive = true }
+    AnimatedContent(
+        targetState = uiState is AuthUiState.Checking,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(500))
+        },
+        label = "SplashScreenTransition"
+    ) { isChecking ->
+        if (isChecking) {
+            SplashScreen()
+        } else {
+            NavHost(
+                navController = navController,
+                startDestination = if (uiState is AuthUiState.Success) "main" else "auth"
+            ) {
+                composable("auth") {
+                    AuthScreen(onSignIn = {
+                        navController.navigate("main") {
+                            popUpTo("auth") { inclusive = true }
+                        }
+                    })
                 }
-            })
-        }
-        composable("main") {
-            TopLevelNav()
+                composable("main") {
+                    TopLevelNav()
+                }
+            }
         }
     }
 }

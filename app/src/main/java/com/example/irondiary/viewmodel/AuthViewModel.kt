@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 sealed class AuthUiState {
+    object Initial : AuthUiState() // Initial state
+    object Checking : AuthUiState() // Specifically during Firebase check
     object Idle : AuthUiState()
     object Loading : AuthUiState()
     data class Success(val user: FirebaseUser) : AuthUiState()
@@ -26,7 +28,7 @@ class AuthViewModel(private val repository: IronDiaryRepository? = null) : ViewM
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
-    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
+    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Checking)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -34,9 +36,9 @@ class AuthViewModel(private val repository: IronDiaryRepository? = null) : ViewM
         if (user != null) {
             _uiState.value = AuthUiState.Success(user)
         } else {
-            // If the user was previously logged in (Success state) and is now null,
-            // their session expired or they were remotely signed out.
-            if (_uiState.value is AuthUiState.Success) {
+            // Transition from Checking to Idle if no user is found on initial check
+            // Or if the user was previously logged in and is now null
+            if (_uiState.value is AuthUiState.Checking || _uiState.value is AuthUiState.Success) {
                 _uiState.value = AuthUiState.Idle
             }
         }
