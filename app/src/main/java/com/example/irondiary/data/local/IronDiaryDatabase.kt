@@ -18,7 +18,7 @@ import com.example.irondiary.data.local.entity.DailyLogEntity
         StudySessionEntity::class, 
         DailyLogEntity::class
     ], 
-    version = 1, 
+    version = 2, 
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -31,6 +31,12 @@ abstract class IronDiaryDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: IronDiaryDatabase? = null
+        
+        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN reminderTime INTEGER")
+            }
+        }
 
         fun getDatabase(context: Context): IronDiaryDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -41,6 +47,7 @@ abstract class IronDiaryDatabase : RoomDatabase() {
                 )
                 // In a production scenario, provide destructive migration fallback 
                 // or specific version migrations here.
+                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
