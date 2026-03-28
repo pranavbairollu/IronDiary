@@ -234,6 +234,7 @@ fun TopLevelNav() {
             composable(Screen.Calendar.route) { CalendarScreen() }
             composable(Screen.Academics.route) { AcademicsScreen(mainViewModel) }
             composable(Screen.Graph.route) { WeightGraphScreen() }
+            composable(Screen.Templates.route) { com.example.irondiary.ui.templates.TemplatesScreen() }
         }
     }
 }

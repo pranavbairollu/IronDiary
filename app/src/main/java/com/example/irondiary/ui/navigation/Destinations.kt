@@ -15,10 +15,12 @@ sealed class Screen(
     object Calendar : Screen("calendar", "Calendar", { Icon(Icons.Filled.DateRange, contentDescription = null) })
     object Academics : Screen("academics", "Academics", { Icon(Icons.Filled.School, contentDescription = null) })
     object Graph : Screen("graph", "Graph", { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) })
+    object Templates : Screen("templates", "Templates", { Icon(androidx.compose.material.icons.filled.Done, contentDescription = null) })
 }
 
 val bottomNavItems = listOf(
     Screen.Calendar,
     Screen.Academics,
     Screen.Graph,
+    Screen.Templates,
 )

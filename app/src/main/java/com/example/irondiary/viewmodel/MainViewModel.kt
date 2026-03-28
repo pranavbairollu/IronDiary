@@ -50,6 +50,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
 
+    private val _templates = MutableStateFlow<List<String>>(emptyList())
+    val templates: StateFlow<List<String>> = _templates.asStateFlow()
+
     private var dailyLogsJob: Job? = null
     private var weightDataJob: Job? = null
     private var studySessionsJob: Job? = null
@@ -66,6 +69,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         fetchWeightData()
         fetchStudySessions()
         fetchTasks()
+        loadTemplates()
         
         // Trigger background sync on app startup (Safeguard #4)
         repository.enqueueSync()
@@ -392,6 +396,51 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         } else {
             com.example.irondiary.util.NotificationHelper.cancelDailyReminder(context)
         }
+    }
+
+    private fun loadTemplates() {
+        val templatesJson = sharedPreferences.getString("task_templates", "[]") ?: "[]"
+        try {
+            val jsonArray = org.json.JSONArray(templatesJson)
+            val list = mutableListOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                list.add(jsonArray.getString(i))
+            }
+            _templates.value = list
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Failed to parse templates JSON", e)
+            _templates.value = emptyList()
+        }
+    }
+
+    fun addTemplate(template: String) {
+        val trimmed = template.trim()
+        if (trimmed.isEmpty()) return
+        
+        val currentList = _templates.value.toMutableList()
+        if (!currentList.contains(trimmed)) {
+            currentList.add(trimmed)
+            _templates.value = currentList
+            saveTemplatesToPrefs(currentList)
+        }
+    }
+
+    fun removeTemplate(template: String) {
+        val currentList = _templates.value.toMutableList()
+        if (currentList.remove(template)) {
+            _templates.value = currentList
+            saveTemplatesToPrefs(currentList)
+        }
+    }
+
+    private fun saveTemplatesToPrefs(templatesList: List<String>) {
+        val jsonArray = org.json.JSONArray()
+        templatesList.forEach { jsonArray.put(it) }
+        sharedPreferences.edit().putString("task_templates", jsonArray.toString()).apply()
+    }
+
+    fun addTemplateToToday(template: String) {
+        addTask(template)
     }
 
     override fun onCleared() {
