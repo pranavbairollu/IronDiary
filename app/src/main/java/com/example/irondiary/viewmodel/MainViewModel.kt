@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
 
+data class TaskTemplate(
+    val category: String,
+    val title: String,
+    val emoji: String
+)
+
 /**
  * The primary ViewModel for managing UI state and business logic in the IronDiary app.
  *
@@ -50,8 +56,40 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
 
-    private val _templates = MutableStateFlow<List<String>>(emptyList())
-    val templates: StateFlow<List<String>> = _templates.asStateFlow()
+    private val _customTemplates = MutableStateFlow<List<String>>(emptyList())
+    
+    private val defaultTemplates = listOf(
+        TaskTemplate("Health", "Drink water, keep healthy", "💧"),
+        TaskTemplate("Health", "Go to bed early", "🌙"),
+        TaskTemplate("Health", "Get up early", "🌅"),
+        TaskTemplate("Health", "Medication reminder", "💊"),
+        TaskTemplate("Health", "Take a break", "☕"),
+        TaskTemplate("Health", "Eat fruits", "🍎"),
+        TaskTemplate("Life", "Clean house", "🧹"),
+        TaskTemplate("Life", "Skin care", "🧖‍♀️"),
+        TaskTemplate("Life", "Go shopping", "🛒"),
+        TaskTemplate("Life", "Feed pets", "🐾"),
+        TaskTemplate("Life", "Study", "👩‍🎓"),
+        TaskTemplate("Life", "Keep reading", "📚"),
+        TaskTemplate("Life", "Learn a foreign language", "🗣️"),
+        TaskTemplate("Life", "Learn instruments", "🎸"),
+        TaskTemplate("Life", "Keep in touch with family", "📞"),
+        TaskTemplate("Sports", "Go exercising", "🏃‍♂️"),
+        TaskTemplate("Sports", "Stretch", "🤸"),
+        TaskTemplate("Sports", "Swimming", "🏊‍♂️"),
+        TaskTemplate("Sports", "Practice Yoga", "🧘‍♀️"),
+        TaskTemplate("Sports", "Cycling", "🚴"),
+        TaskTemplate("Mind", "Meditation", "🪷"),
+        TaskTemplate("Mind", "Be grateful for what you have", "🙏"),
+        TaskTemplate("Mind", "Pray", "🤲"),
+        TaskTemplate("Mind", "Practice smiling and be happy", "😊"),
+        TaskTemplate("Quit", "Eat less sugar", "🍬"),
+        TaskTemplate("Quit", "Less time on your phone", "📱"),
+        TaskTemplate("Quit", "Play less game", "🎮")
+    )
+
+    private val _categorizedTemplates = MutableStateFlow<Map<String, List<TaskTemplate>>>(emptyMap())
+    val categorizedTemplates: StateFlow<Map<String, List<TaskTemplate>>> = _categorizedTemplates.asStateFlow()
 
     private var dailyLogsJob: Job? = null
     private var weightDataJob: Job? = null
@@ -406,30 +444,52 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
             for (i in 0 until jsonArray.length()) {
                 list.add(jsonArray.getString(i))
             }
-            _templates.value = list
+            _customTemplates.value = list
+            updateCategorizedTemplates()
         } catch (e: Exception) {
             Log.e("MainViewModel", "Failed to parse templates JSON", e)
-            _templates.value = emptyList()
+            _customTemplates.value = emptyList()
+            updateCategorizedTemplates()
         }
+    }
+
+    private fun updateCategorizedTemplates() {
+        val customTaskTemplates = _customTemplates.value.map { TaskTemplate("Custom", it, "✨") }
+        val allTemplates = customTaskTemplates + defaultTemplates
+        
+        // Group and maintain order: Custom first, then Health, Life, Sports, Mind, Quit
+        val order = listOf("Custom", "Health", "Life", "Sports", "Mind", "Quit")
+        
+        val grouped = allTemplates.groupBy { it.category }
+        val sortedMap = LinkedHashMap<String, List<TaskTemplate>>()
+        
+        for (category in order) {
+            grouped[category]?.let { sortedMap[category] = it }
+        }
+        
+        _categorizedTemplates.value = sortedMap
     }
 
     fun addTemplate(template: String) {
         val trimmed = template.trim()
         if (trimmed.isEmpty()) return
         
-        val currentList = _templates.value.toMutableList()
+        val currentList = _customTemplates.value.toMutableList()
         if (!currentList.contains(trimmed)) {
             currentList.add(trimmed)
-            _templates.value = currentList
+            _customTemplates.value = currentList
             saveTemplatesToPrefs(currentList)
+            updateCategorizedTemplates()
         }
     }
 
     fun removeTemplate(template: String) {
-        val currentList = _templates.value.toMutableList()
+        // Only custom templates can currently be removed via UI
+        val currentList = _customTemplates.value.toMutableList()
         if (currentList.remove(template)) {
-            _templates.value = currentList
+            _customTemplates.value = currentList
             saveTemplatesToPrefs(currentList)
+            updateCategorizedTemplates()
         }
     }
 
@@ -439,8 +499,8 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         sharedPreferences.edit().putString("task_templates", jsonArray.toString()).apply()
     }
 
-    fun addTemplateToToday(template: String) {
-        addTask(template)
+    fun addTemplateToToday(template: TaskTemplate) {
+        addTask(template.title)
     }
 
     override fun onCleared() {
