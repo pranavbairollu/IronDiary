@@ -48,19 +48,22 @@ class IronDiaryRepository(val context: android.content.Context) {
     /**
      * Inserts a new task locally with PENDING sync status and triggers a sync work.
      */
-    suspend fun addTask(userId: String, description: String) {
+    suspend fun addTask(userId: String, description: String, reminderTime: Long? = null): String {
         val trimmedDesc = description.trim()
         if (trimmedDesc.isBlank()) throw IllegalArgumentException("Task description cannot be empty")
         if (trimmedDesc.length > 500) throw IllegalArgumentException("Task description too long")
 
+        val taskId = UUID.randomUUID().toString()
         val task = Task(
-            docId = UUID.randomUUID().toString(),
+            docId = taskId,
             description = trimmedDesc,
             createdDate = Timestamp.now(),
+            reminderTime = reminderTime,
             updatedAt = Timestamp.now()
         )
         taskDao.insert(task.toEntity(userId, SyncState.PENDING))
         enqueueSync()
+        return taskId
     }
 
     /**

@@ -48,9 +48,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _tasks = MutableStateFlow<Resource<List<Task>>>(Resource.Success(emptyList()))
     val tasks: StateFlow<Resource<List<Task>>> = _tasks.asStateFlow()
 
-    private val _isDailyReminderEnabled = MutableStateFlow(
-        sharedPreferences.getBoolean("daily_reminders_enabled", false) // Default to false
-    )
+    private val _isDailyReminderEnabled = MutableStateFlow(false)
     val isDailyReminderEnabled: StateFlow<Boolean> = _isDailyReminderEnabled.asStateFlow()
 
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
@@ -287,7 +285,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         }
     }
 
-    fun addTask(description: String) {
+    fun addTask(description: String, reminderTime: Long? = null) {
         val trimmedDesc = description.trim()
         if (trimmedDesc.isEmpty()) {
             _saveStatus.value = Resource.Error("Task description cannot be empty.")
@@ -307,7 +305,18 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         _saveStatus.value = Resource.Loading
         viewModelScope.launch {
             try {
-                repository.addTask(userId, trimmedDesc)
+                val taskId = repository.addTask(userId, trimmedDesc, reminderTime)
+                
+                // Schedule high-priority task reminder if set
+                reminderTime?.let { time ->
+                    com.example.irondiary.util.NotificationHelper.scheduleTaskReminder(
+                        repository.context,
+                        taskId,
+                        trimmedDesc,
+                        time
+                    )
+                }
+                
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
                 _saveStatus.value = Resource.Error("Failed to save task: ${e.message}")
@@ -425,15 +434,40 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         _saveStatus.value = null
     }
 
+    fun updateTaskReminder(task: Task, newReminderTime: Long?) {
+        val userId = auth.currentUser?.uid ?: return
+        _saveStatus.value = Resource.Loading
+        
+        viewModelScope.launch {
+            try {
+                val updatedTask = task.copy(reminderTime = newReminderTime, updatedAt = com.google.firebase.Timestamp.now())
+                repository.updateTask(updatedTask, userId)
+                
+                if (newReminderTime != null) {
+                    com.example.irondiary.util.NotificationHelper.scheduleTaskReminder(
+                        repository.context,
+                        task.docId,
+                        task.description,
+                        newReminderTime
+                    )
+                } else {
+                    com.example.irondiary.util.NotificationHelper.cancelTaskReminder(
+                        repository.context,
+                        task.docId
+                    )
+                }
+                
+                _saveStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _saveStatus.value = Resource.Error("Failed to update reminder: ${e.message}")
+            }
+        }
+    }
+
     fun toggleDailyReminder(enabled: Boolean, context: Context) {
+        // Deprecated: Moving to per-task high-priority reminders.
         sharedPreferences.edit().putBoolean("daily_reminders_enabled", enabled).apply()
         _isDailyReminderEnabled.value = enabled
-        
-        if (enabled) {
-            com.example.irondiary.util.NotificationHelper.scheduleDailyReminder(context)
-        } else {
-            com.example.irondiary.util.NotificationHelper.cancelDailyReminder(context)
-        }
     }
 
     private fun loadTemplates() {

@@ -12,6 +12,7 @@ fun TaskEntity.toDomainModel(): Task {
         completed = completed,
         createdDate = Timestamp(createdDate / 1000, ((createdDate % 1000) * 1000000).toInt()),
         completedDate = completedDate?.let { Timestamp(it / 1000, ((it % 1000) * 1000000).toInt()) },
+        reminderTime = reminderTime,
         updatedAt = Timestamp(localUpdatedAt / 1000, ((localUpdatedAt % 1000) * 1000000).toInt()),
         syncState = syncState
     )
@@ -25,6 +26,7 @@ fun Task.toEntity(userId: String, syncState: SyncState): TaskEntity {
         completed = completed,
         createdDate = createdDate.toDate().time,
         completedDate = completedDate?.toDate()?.time,
+        reminderTime = reminderTime,
         localUpdatedAt = updatedAt.toDate().time,
         syncState = syncState
     )

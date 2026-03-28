@@ -20,9 +20,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Calendar
+import android.app.TimePickerDialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import com.example.irondiary.data.model.Task
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,10 +40,31 @@ import com.example.irondiary.data.model.Task
 fun TaskDialog(
     task: Task? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (String, Long?) -> Unit,
     isLoading: Boolean = false
 ) {
+    val context = LocalContext.current
     var description by remember { mutableStateOf(task?.description ?: "") }
+    var reminderTime by remember { mutableStateOf(task?.reminderTime) }
+    
+    val calendar = remember { Calendar.getInstance() }
+    val timePickerDialog = remember {
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                val newCalendar = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, hourOfDay)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                reminderTime = newCalendar.timeInMillis
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        )
+    }
     val trimmedDesc = description.trim()
     val isLengthTooLong = trimmedDesc.length > 500
     val isDescValid = trimmedDesc.isNotEmpty() && !isLengthTooLong
@@ -64,11 +95,54 @@ fun TaskDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+                
+                Spacer(modifier = Modifier.size(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (reminderTime != null) Icons.Default.Notifications else Icons.Default.NotificationsNone,
+                            contentDescription = null,
+                            tint = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = if (reminderTime != null) {
+                                val cal = Calendar.getInstance().apply { timeInMillis = reminderTime!! }
+                                val hour = cal.get(Calendar.HOUR_OF_DAY)
+                                val minute = cal.get(Calendar.MINUTE)
+                                String.format("Reminder: %02d:%02d", hour, minute)
+                            } else {
+                                "No Reminder Set"
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    TextButton(onClick = { timePickerDialog.show() }) {
+                        Text(if (reminderTime == null) "Set Reminder" else "Change")
+                    }
+                    
+                    if (reminderTime != null) {
+                        IconButton(onClick = { reminderTime = null }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove Reminder",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(trimmedDesc) },
+                onClick = { onConfirm(trimmedDesc, reminderTime) },
                 enabled = isDescValid && !isLoading
             ) {
                 if (isLoading) {

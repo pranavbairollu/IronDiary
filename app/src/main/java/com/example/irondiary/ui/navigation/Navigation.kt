@@ -167,8 +167,9 @@ fun TopLevelNav() {
     if (showLogTaskDialog) {
         TaskDialog(
             onDismiss = { showLogTaskDialog = false },
-            onConfirm = { description ->
-                mainViewModel.addTask(description)
+            onConfirm = { description, reminderTime ->
+                mainViewModel.addTask(description, reminderTime)
+                showLogTaskDialog = false
             }
             // If TaskDialog doesn't support isLoading yet, we rely on the dialog staying open
             // until LaunchedEffect closes it upon Success. Adding isLoading parameter to TaskDialog

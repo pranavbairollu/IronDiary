@@ -15,7 +15,7 @@ class BootReceiver : BroadcastReceiver() {
             action == Intent.ACTION_TIMEZONE_CHANGED ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             
-            NotificationHelper.scheduleDailyReminder(context)
+            // NotificationHelper.scheduleDailyReminder(context) // Removed global daily reminders
         }
     }
 }

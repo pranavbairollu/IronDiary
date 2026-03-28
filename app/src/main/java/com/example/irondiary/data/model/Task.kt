@@ -10,6 +10,7 @@ data class Task(
     val createdDate: Timestamp = Timestamp.now(),
     var completedDate: Timestamp? = null,
     var completed: Boolean = false,
+    var reminderTime: Long? = null,
     var updatedAt: Timestamp = Timestamp.now(),
     val syncState: SyncState = SyncState.SYNCED
 )

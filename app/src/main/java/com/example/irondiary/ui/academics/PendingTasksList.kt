@@ -101,7 +101,10 @@ fun PendingTasksList() {
                                     task = task, 
                                     onTaskToggled = { mainViewModel.toggleTaskCompletion(it) },
                                     onDeleteTask = { mainViewModel.deleteTask(it) },
-                                    onEditTask = { t, desc -> mainViewModel.updateTaskDescription(t, desc) },
+                                    onEditTask = { t, desc, time -> 
+                                        mainViewModel.updateTaskDescription(t, desc)
+                                        mainViewModel.updateTaskReminder(t, time)
+                                    },
                                     isInteractionDisabled = isLoading
                                 )
                             }
@@ -118,7 +121,7 @@ fun PendingTaskItem(
     task: Task, 
     onTaskToggled: (Task) -> Unit, 
     onDeleteTask: (Task) -> Unit,
-    onEditTask: (Task, String) -> Unit,
+    onEditTask: (Task, String, Long?) -> Unit,
     isInteractionDisabled: Boolean = false
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -150,8 +153,8 @@ fun PendingTaskItem(
         TaskDialog(
             task = task,
             onDismiss = { showEditDialog = false },
-            onConfirm = { newDesc ->
-                onEditTask(task, newDesc)
+            onConfirm = { newDesc, newTime ->
+                onEditTask(task, newDesc, newTime)
                 showEditDialog = false
             },
             isLoading = isInteractionDisabled

@@ -20,6 +20,7 @@ data class TaskEntity(
     
     val description: String,
     val completed: Boolean,
+    val reminderTime: Long? = null,
     
     // Original creation date as Unix timestamp
     val createdDate: Long,

@@ -11,20 +11,23 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import java.util.Calendar
+import android.util.Log
 import java.util.concurrent.TimeUnit
 
 object NotificationHelper {
 
-    const val CHANNEL_ID = "daily_reminder_channel"
-    const val NOTIFICATION_ID = 1
+    const val CHANNEL_ID = "task_reminder_channel"
+    const val DEFAULT_NOTIFICATION_ID = 1001
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Daily Reminder"
-            val descriptionText = "Channel for daily logging reminders"
+            val name = "Task Reminders"
+            val descriptionText = "Notifications for individual task reminders"
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
+                enableVibration(true)
+                setBypassDnd(true) // For high priority
             }
             val notificationManager: NotificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -48,36 +51,38 @@ object NotificationHelper {
         return sharedPreferences.getBoolean("daily_reminders_enabled", false)
     }
 
-    fun scheduleDailyReminder(
-        context: Context, 
-        now: Long = System.currentTimeMillis(),
-        calendar: Calendar = Calendar.getInstance()
+    fun scheduleTaskReminder(
+        context: Context,
+        taskId: String,
+        description: String,
+        reminderTimeMillis: Long
     ) {
-        if (!isDailyReminderEnabled(context)) {
-            cancelDailyReminder(context)
-            return
-        }
-
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, NotificationReceiver::class.java)
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            putExtra("TASK_ID", taskId)
+            putExtra("TASK_DESCRIPTION", description)
+        }
+        
+        // Use hash of taskId for unique request code
+        val requestCode = taskId.hashCode()
+        
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            NOTIFICATION_ID,
+            requestCode,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        calendar.apply {
-            timeInMillis = now
-            set(Calendar.HOUR_OF_DAY, 21)
-            set(Calendar.MINUTE, 30)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-
-            // If the time has already passed today, schedule for tomorrow
-            if (timeInMillis <= now) {
+        val now = System.currentTimeMillis()
+        var scheduleTime = reminderTimeMillis
+        
+        // If the time has already passed today, schedule for tomorrow
+        if (scheduleTime <= now) {
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = scheduleTime
                 add(Calendar.DAY_OF_YEAR, 1)
             }
+            scheduleTime = calendar.timeInMillis
         }
 
         try {
@@ -85,47 +90,46 @@ object NotificationHelper {
                 if (alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
+                        scheduleTime,
                         pendingIntent
                     )
                 } else {
-                    // Fallback for Android 12+ if exact alarm permission is not granted
                     alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
+                        scheduleTime,
                         pendingIntent
                     )
                 }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
+                    scheduleTime,
                     pendingIntent
                 )
             } else {
-                alarmManager.setInexactRepeating(
+                alarmManager.set(
                     AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    AlarmManager.INTERVAL_DAY,
+                    scheduleTime,
                     pendingIntent
                 )
             }
+            Log.d("NotificationHelper", "Scheduled reminder for task $taskId at $scheduleTime")
         } catch (e: SecurityException) {
-            // Handle edge case where canScheduleExactAlarms() might lie or permission is revoked just before call
             alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
+                scheduleTime,
                 pendingIntent
             )
         }
     }
 
-    fun cancelDailyReminder(context: Context) {
+    fun cancelTaskReminder(context: Context, taskId: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, NotificationReceiver::class.java)
+        val requestCode = taskId.hashCode()
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            NOTIFICATION_ID,
+            requestCode,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )

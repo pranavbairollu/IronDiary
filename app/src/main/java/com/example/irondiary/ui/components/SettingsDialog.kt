@@ -19,20 +19,7 @@ fun SettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val isDailyReminderEnabled by mainViewModel.isDailyReminderEnabled.collectAsState()
     var permissionDeniedAlert by remember { mutableStateOf(false) }
-
-    val requestPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            mainViewModel.toggleDailyReminder(true, context)
-        } else {
-            // Permission denied, revert the toggle attempt
-            permissionDeniedAlert = true
-            mainViewModel.toggleDailyReminder(false, context)
-        }
-    }
 
     if (permissionDeniedAlert) {
         AlertDialog(
@@ -52,32 +39,17 @@ fun SettingsDialog(
         title = { Text("Settings") },
         text = {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Daily Reminders (9:30 PM)", style = MaterialTheme.typography.bodyLarge)
-                    Switch(
-                        checked = isDailyReminderEnabled,
-                        onCheckedChange = { enable ->
-                            if (enable) {
-                                if (!NotificationHelper.hasNotificationPermission(context)) {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    } else {
-                                        // SDK < 33, permission implicitly granted, but just in case:
-                                        mainViewModel.toggleDailyReminder(true, context)
-                                    }
-                                } else {
-                                    mainViewModel.toggleDailyReminder(true, context)
-                                }
-                            } else {
-                                mainViewModel.toggleDailyReminder(false, context)
-                            }
-                        }
-                    )
-                }
+                Text(
+                    "Daily reminders at 9:30 PM have been removed in favor of task-specific reminders.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "You can now set a custom reminder time for each task when you create or edit it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
             }
         },
         confirmButton = {

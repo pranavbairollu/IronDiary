@@ -22,30 +22,35 @@ class NotificationReceiver : BroadcastReceiver() {
         NotificationHelper.createNotificationChannel(context)
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        val taskId = intent.getStringExtra("TASK_ID") ?: "unknown"
+        val taskDescription = intent.getStringExtra("TASK_DESCRIPTION") ?: "You have a task to complete!"
 
         val notificationIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("FRAGMENT_TO_OPEN", "academics") // Optional: open tasks screen
         }
+        
+        val requestCode = taskId.hashCode()
         val pendingIntent = PendingIntent.getActivity(
             context,
-            0,
+            requestCode,
             notificationIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Log Your Day")
-            .setContentText("Don't forget to log your activities for the day!")
+            .setContentTitle("Task Reminder")
+            .setContentText(taskDescription)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
-        Log.d("NotificationReceiver", "Daily reminder notification posted.")
-
-        // Reschedule the alarm for the next day, crucial for exact alarms that don't repeat automatically
-        NotificationHelper.scheduleDailyReminder(context)
+        notificationManager.notify(requestCode, notification)
+        Log.d("NotificationReceiver", "Task reminder notification posted for $taskId: $taskDescription")
     }
 }
