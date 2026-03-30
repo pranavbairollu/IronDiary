@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -53,6 +54,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
+
+    private val _templateStatus = MutableStateFlow<Resource<Unit>?>(null)
+    val templateStatus: StateFlow<Resource<Unit>?> = _templateStatus.asStateFlow()
 
     private val _customTemplates = MutableStateFlow<List<TaskTemplate>>(emptyList())
     
@@ -434,6 +438,10 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         _saveStatus.value = null
     }
 
+    fun resetTemplateStatus() {
+        _templateStatus.value = null
+    }
+
     fun updateTaskReminder(task: Task, newReminderTime: Long?) {
         val userId = auth.currentUser?.uid ?: return
         _saveStatus.value = Resource.Loading
@@ -476,22 +484,25 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
             val jsonArray = org.json.JSONArray(templatesJson)
             val list = mutableListOf<TaskTemplate>()
             for (i in 0 until jsonArray.length()) {
-                val item = jsonArray.get(i)
-                if (item is String) {
-                    // Migration from old string-only format
-                    list.add(TaskTemplate("Custom", item, "✨"))
-                } else if (item is org.json.JSONObject) {
-                    list.add(TaskTemplate(
-                        category = "Custom",
-                        title = item.getString("title"),
-                        emoji = item.getString("emoji")
-                    ))
+                try {
+                    val item = jsonArray.get(i)
+                    if (item is String) {
+                        list.add(TaskTemplate("Custom", item, "✨"))
+                    } else if (item is org.json.JSONObject) {
+                        list.add(TaskTemplate(
+                            category = "Custom",
+                            title = item.optString("title", "Unknown Task"),
+                            emoji = item.optString("emoji", "✨")
+                        ))
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainViewModel", "Skipping corrupted template entry at index $i", e)
                 }
             }
-            _customTemplates.value = list
+            _customTemplates.value = list.take(100) // Hardware limit for UI stability
             updateCategorizedTemplates()
         } catch (e: Exception) {
-            Log.e("MainViewModel", "Failed to parse templates JSON", e)
+            Log.e("MainViewModel", "Critical failure parsing templates JSON", e)
             _customTemplates.value = emptyList()
             updateCategorizedTemplates()
         }
@@ -519,36 +530,56 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         val trimmedTitle = title.trim()
         val trimmedEmoji = emoji.trim().ifEmpty { "✨" }
         
+        // Strict Validation (Second Line of Defense)
         if (trimmedTitle.isEmpty()) {
-            _saveStatus.value = Resource.Error("Template title cannot be empty.")
+            _templateStatus.value = Resource.Error("Template title cannot be empty.")
             return
         }
-        
         if (trimmedTitle.length > 100) {
-            _saveStatus.value = Resource.Error("Template name is too long.")
+            _templateStatus.value = Resource.Error("Template title too long (max 100).")
             return
         }
-        
-        val currentList = _customTemplates.value.toMutableList()
-        // Case-insensitive duplicate check
-        if (currentList.none { it.title.equals(trimmedTitle, ignoreCase = true) }) {
-            currentList.add(TaskTemplate("Custom", trimmedTitle, trimmedEmoji))
-            _customTemplates.value = currentList
-            saveTemplatesToPrefs(currentList)
-            updateCategorizedTemplates()
-            _saveStatus.value = Resource.Success(Unit) // Trigger snackbar in UI
+        if (trimmedEmoji.length > 8) { // Allow for some multi-byte emojis but cap it
+            _templateStatus.value = Resource.Error("Emoji too long.")
+            return
+        }
+
+        var alreadyExists = false
+        var limitReached = false
+
+        _customTemplates.update { currentList ->
+            if (currentList.size >= 100) {
+                limitReached = true
+                currentList
+            } else if (currentList.any { it.title.equals(trimmedTitle, ignoreCase = true) }) {
+                alreadyExists = true
+                currentList
+            } else {
+                val newList = currentList + TaskTemplate("Custom", trimmedTitle, trimmedEmoji)
+                saveTemplatesToPrefs(newList)
+                updateCategorizedTemplates()
+                newList
+            }
+        }
+
+        if (limitReached) {
+            _templateStatus.value = Resource.Error("Maximum of 100 custom templates allowed.")
+        } else if (alreadyExists) {
+            _templateStatus.value = Resource.Error("Template '$trimmedTitle' already exists.")
         } else {
-            _saveStatus.value = Resource.Error("Template '$trimmedTitle' already exists.")
+            _templateStatus.value = Resource.Success(Unit)
         }
     }
 
     fun removeTemplate(templateTitle: String) {
-        val currentList = _customTemplates.value.toMutableList()
-        if (currentList.removeAll { it.title == templateTitle }) {
-            _customTemplates.value = currentList
-            saveTemplatesToPrefs(currentList)
+        val currentList = _customTemplates.value
+        val newList = currentList.filterNot { it.title == templateTitle }
+        
+        if (newList.size != currentList.size) {
+            _customTemplates.value = newList
+            saveTemplatesToPrefs(newList)
             updateCategorizedTemplates()
-            _saveStatus.value = Resource.Success(Unit)
+            _templateStatus.value = Resource.Success(Unit)
         }
     }
 
@@ -564,7 +595,21 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     }
 
     fun addTemplateToToday(template: TaskTemplate) {
-        addTask(template.title)
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            _templateStatus.value = Resource.Error("Must be logged in.")
+            return
+        }
+
+        _templateStatus.value = Resource.Loading
+        viewModelScope.launch {
+            try {
+                repository.addTask(userId, template.title)
+                _templateStatus.value = Resource.Success(Unit)
+            } catch (e: Exception) {
+                _templateStatus.value = Resource.Error("Failed to add task: ${e.message}")
+            }
+        }
     }
 
     override fun onCleared() {

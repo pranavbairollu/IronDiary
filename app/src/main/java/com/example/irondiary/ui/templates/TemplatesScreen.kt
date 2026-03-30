@@ -30,19 +30,19 @@ fun TemplatesScreen() {
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val categorizedTemplates by mainViewModel.categorizedTemplates.collectAsState()
-    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    val templateStatus by mainViewModel.templateStatus.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(saveStatus) {
-        when (val status = saveStatus) {
+    LaunchedEffect(templateStatus) {
+        when (val status = templateStatus) {
             is Resource.Success -> {
-                snackbarHostState.showSnackbar("Action successful!")
-                mainViewModel.resetSaveStatus()
+                snackbarHostState.showSnackbar("Success!")
+                mainViewModel.resetTemplateStatus()
             }
             is Resource.Error -> {
                 snackbarHostState.showSnackbar(status.message ?: "An error occurred")
-                mainViewModel.resetSaveStatus()
+                mainViewModel.resetTemplateStatus()
             }
             else -> {}
         }
@@ -78,16 +78,21 @@ fun TemplatesScreen() {
                 }
             },
             confirmButton = {
+                val isLoading = templateStatus is Resource.Loading
                 Button(
                     onClick = {
-                        if (newTemplateName.isNotBlank()) {
+                        if (newTemplateName.isNotBlank() && !isLoading) {
                             mainViewModel.addTemplate(newTemplateName, newTemplateEmoji)
                             showAddDialog = false
                         }
                     },
-                    enabled = newTemplateName.isNotBlank()
+                    enabled = newTemplateName.isNotBlank() && !isLoading
                 ) {
-                    Text("Add")
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Add")
+                    }
                 }
             },
             dismissButton = {
