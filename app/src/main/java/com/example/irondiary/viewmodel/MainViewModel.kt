@@ -54,7 +54,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _saveStatus = MutableStateFlow<Resource<Unit>?>(null)
     val saveStatus: StateFlow<Resource<Unit>?> = _saveStatus.asStateFlow()
 
-    private val _customTemplates = MutableStateFlow<List<String>>(emptyList())
+    private val _customTemplates = MutableStateFlow<List<TaskTemplate>>(emptyList())
     
     private val defaultTemplates = listOf(
         TaskTemplate("Health", "Drink water, keep healthy", "💧"),
@@ -474,9 +474,19 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         val templatesJson = sharedPreferences.getString("task_templates", "[]") ?: "[]"
         try {
             val jsonArray = org.json.JSONArray(templatesJson)
-            val list = mutableListOf<String>()
+            val list = mutableListOf<TaskTemplate>()
             for (i in 0 until jsonArray.length()) {
-                list.add(jsonArray.getString(i))
+                val item = jsonArray.get(i)
+                if (item is String) {
+                    // Migration from old string-only format
+                    list.add(TaskTemplate("Custom", item, "✨"))
+                } else if (item is org.json.JSONObject) {
+                    list.add(TaskTemplate(
+                        category = "Custom",
+                        title = item.getString("title"),
+                        emoji = item.getString("emoji")
+                    ))
+                }
             }
             _customTemplates.value = list
             updateCategorizedTemplates()
@@ -488,7 +498,8 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     }
 
     private fun updateCategorizedTemplates() {
-        val customTaskTemplates = _customTemplates.value.map { TaskTemplate("Custom", it, "✨") }
+        // Custom templates already have "Custom" category but we ensure it here
+        val customTaskTemplates = _customTemplates.value
         val allTemplates = customTaskTemplates + defaultTemplates
         
         // Group and maintain order: Custom first, then Health, Life, Sports, Mind, Quit
@@ -504,32 +515,51 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         _categorizedTemplates.value = sortedMap
     }
 
-    fun addTemplate(template: String) {
-        val trimmed = template.trim()
-        if (trimmed.isEmpty()) return
+    fun addTemplate(title: String, emoji: String = "✨") {
+        val trimmedTitle = title.trim()
+        val trimmedEmoji = emoji.trim().ifEmpty { "✨" }
+        
+        if (trimmedTitle.isEmpty()) {
+            _saveStatus.value = Resource.Error("Template title cannot be empty.")
+            return
+        }
+        
+        if (trimmedTitle.length > 100) {
+            _saveStatus.value = Resource.Error("Template name is too long.")
+            return
+        }
         
         val currentList = _customTemplates.value.toMutableList()
-        if (!currentList.contains(trimmed)) {
-            currentList.add(trimmed)
+        // Case-insensitive duplicate check
+        if (currentList.none { it.title.equals(trimmedTitle, ignoreCase = true) }) {
+            currentList.add(TaskTemplate("Custom", trimmedTitle, trimmedEmoji))
             _customTemplates.value = currentList
             saveTemplatesToPrefs(currentList)
             updateCategorizedTemplates()
+            _saveStatus.value = Resource.Success(Unit) // Trigger snackbar in UI
+        } else {
+            _saveStatus.value = Resource.Error("Template '$trimmedTitle' already exists.")
         }
     }
 
-    fun removeTemplate(template: String) {
-        // Only custom templates can currently be removed via UI
+    fun removeTemplate(templateTitle: String) {
         val currentList = _customTemplates.value.toMutableList()
-        if (currentList.remove(template)) {
+        if (currentList.removeAll { it.title == templateTitle }) {
             _customTemplates.value = currentList
             saveTemplatesToPrefs(currentList)
             updateCategorizedTemplates()
+            _saveStatus.value = Resource.Success(Unit)
         }
     }
 
-    private fun saveTemplatesToPrefs(templatesList: List<String>) {
+    private fun saveTemplatesToPrefs(templatesList: List<TaskTemplate>) {
         val jsonArray = org.json.JSONArray()
-        templatesList.forEach { jsonArray.put(it) }
+        templatesList.forEach {
+            val obj = org.json.JSONObject()
+            obj.put("title", it.title)
+            obj.put("emoji", it.emoji)
+            jsonArray.put(obj)
+        }
         sharedPreferences.edit().putString("task_templates", jsonArray.toString()).apply()
     }
 

@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 import com.example.irondiary.viewmodel.TaskTemplate
+import com.example.irondiary.data.Resource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,27 +30,58 @@ fun TemplatesScreen() {
     val application = LocalContext.current.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val categorizedTemplates by mainViewModel.categorizedTemplates.collectAsState()
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(saveStatus) {
+        when (val status = saveStatus) {
+            is Resource.Success -> {
+                snackbarHostState.showSnackbar("Action successful!")
+                mainViewModel.resetSaveStatus()
+            }
+            is Resource.Error -> {
+                snackbarHostState.showSnackbar(status.message ?: "An error occurred")
+                mainViewModel.resetSaveStatus()
+            }
+            else -> {}
+        }
+    }
 
     if (showAddDialog) {
         var newTemplateName by remember { mutableStateOf("") }
+        var newTemplateEmoji by remember { mutableStateOf("✨") }
+        
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
             title = { Text("New Custom Template", style = MaterialTheme.typography.titleLarge) },
             text = {
-                OutlinedTextField(
-                    value = newTemplateName,
-                    onValueChange = { newTemplateName = it },
-                    label = { Text("Task description") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = newTemplateName,
+                        onValueChange = { if (it.length <= 100) newTemplateName = it },
+                        label = { Text("Task description") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Text("${newTemplateName.length}/100", modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                        }
+                    )
+                    OutlinedTextField(
+                        value = newTemplateEmoji,
+                        onValueChange = { if (it.length <= 4) newTemplateEmoji = it },
+                        label = { Text("Emoji (e.g. 📋, 🏋️, ✨)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("✨") }
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (newTemplateName.isNotBlank()) {
-                            mainViewModel.addTemplate(newTemplateName)
+                            mainViewModel.addTemplate(newTemplateName, newTemplateEmoji)
                             showAddDialog = false
                         }
                     },
@@ -67,6 +99,7 @@ fun TemplatesScreen() {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
