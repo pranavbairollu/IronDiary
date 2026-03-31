@@ -14,10 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -350,10 +347,11 @@ fun DailyInsightCard(
     date: LocalDate,
     log: DailyLog,
     completedTasks: List<com.example.irondiary.data.model.Task>,
+    isSaving: Boolean,
     onEditClick: () -> Unit
 ) {
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         shape = RoundedCornerShape(24.dp),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -363,19 +361,47 @@ fun DailyInsightCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = date.format(DateTimeFormatter.ofPattern("EEEE")),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = date.format(DateTimeFormatter.ofPattern("EEEE")),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // Sync Status Indicator
+                        val syncIcon = when (log.syncState) {
+                            com.example.irondiary.data.local.SyncState.SYNCED -> Icons.Default.CloudDone
+                            com.example.irondiary.data.local.SyncState.PENDING -> Icons.Default.Sync
+                            com.example.irondiary.data.local.SyncState.FAILED -> Icons.Default.CloudOff
+                        }
+                        Icon(
+                            syncIcon, 
+                            contentDescription = null, 
+                            modifier = Modifier.size(14.dp),
+                            tint = if (log.syncState == com.example.irondiary.data.local.SyncState.FAILED) 
+                                MaterialTheme.colorScheme.error 
+                            else 
+                                MaterialTheme.colorScheme.outline
+                        )
+                    }
                     Text(
                         text = date.format(DateTimeFormatter.ofPattern("MMMM d")),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
-                FilledIconButton(onClick = onEditClick) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit Log")
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).padding(end = 12.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    FilledIconButton(onClick = onEditClick) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Log")
+                    }
                 }
             }
 

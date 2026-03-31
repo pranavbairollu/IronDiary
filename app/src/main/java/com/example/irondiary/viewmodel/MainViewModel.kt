@@ -226,6 +226,8 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         
         activeSaveJobs[log.date] = viewModelScope.launch {
             try {
+                // Debounce rapid saves to prevent database/network flooding
+                delay(400) 
                 repository.saveDailyLog(log, userId)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
@@ -451,16 +453,15 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private fun calculateStats(logsMap: Map<String, DailyLog>) {
         val today = java.time.LocalDate.now()
         var streak = 0
-        var checkDate = today
         
         // Count total workouts
         _totalWorkouts.value = logsMap.values.count { it.attendedGym }
         
-        // Calculate current streak
-        // If user didn't work out today, streak might still be active from yesterday
-        if (logsMap[checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)]?.attendedGym != true) {
-            checkDate = checkDate.minusDays(1)
-        }
+        // Start checking from today or yesterday
+        val todayStr = today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        val hasLoggedToday = logsMap[todayStr]?.attendedGym == true
+        
+        var checkDate = if (hasLoggedToday) today else today.minusDays(1)
         
         while (true) {
             val dateStr = checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
