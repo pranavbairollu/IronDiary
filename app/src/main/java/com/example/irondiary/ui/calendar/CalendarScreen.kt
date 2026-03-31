@@ -2,24 +2,35 @@ package com.example.irondiary.ui.calendar
 
 import android.app.Application
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.Resource
@@ -42,6 +53,10 @@ fun CalendarScreen() {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var showBottomSheet by remember { mutableStateOf(false) }
+    
+    val gymStreak by mainViewModel.gymStreak.collectAsState()
+    val totalWorkouts by mainViewModel.totalWorkouts.collectAsState()
+    val tasksResource by mainViewModel.tasks.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Observe save status for error feedback
@@ -69,8 +84,12 @@ fun CalendarScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
+            Spacer(modifier = Modifier.height(8.dp))
+            GymStreakHeader(streak = gymStreak, totalWorkouts = totalWorkouts)
+            Spacer(modifier = Modifier.height(16.dp))
+            
             CalendarHeader(
                 currentMonth = currentMonth,
                 onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
@@ -83,31 +102,55 @@ fun CalendarScreen() {
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(7),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.height(300.dp) // Fixed height to leave room for the card
             ) {
                 items(daysInMonth) { date ->
                     if (date != null) {
                         val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                        val log = when (val res = dailyLogsResource) {
-                            is Resource.Success -> res.data[dateId]
-                            else -> null
-                        }
+                        val logResource = dailyLogsResource
+                        val log = if (logResource is Resource.Success) logResource.data[dateId] else null
                         val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
 
                         CalendarDay(
                             date = date,
                             isSelected = date == selectedDate,
-                            hasLog = log != null,
+                            attendedGym = log?.attendedGym == true,
+                            hasWeight = log?.weight != null,
                             syncState = syncState,
-                            onDateClick = {
-                                selectedDate = date
-                                showBottomSheet = true
-                            }
+                            onDateClick = { selectedDate = date },
+                            onDateLongClick = { mainViewModel.toggleGymAttendance(date) }
                         )
                     } else {
                         Box(modifier = Modifier.aspectRatio(1f))
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (selectedDate != null) {
+                val dateId = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                val log = when (val res = dailyLogsResource) {
+                    is Resource.Success -> res.data[dateId] ?: DailyLog(date = dateId)
+                    else -> DailyLog(date = dateId)
+                }
+                
+                val completedTasks = when (val res = tasksResource) {
+                    is Resource.Success -> res.data.filter { 
+                        it.completed && it.completedDate?.toDate()?.let { d ->
+                            val ld = d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                            ld == selectedDate
+                        } == true
+                    }
+                    else -> emptyList()
+                }
+
+                DailyInsightCard(
+                    date = selectedDate!!,
+                    log = log,
+                    completedTasks = completedTasks,
+                    onEditClick = { showBottomSheet = true }
+                )
             }
 
             if (showBottomSheet && selectedDate != null) {
@@ -173,60 +216,252 @@ fun DayLabels() {
 }
 
 @Composable
+fun GymStreakHeader(streak: Int, totalWorkouts: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.LocalFireDepartment,
+                    contentDescription = null,
+                    tint = Color(0xFFFF5722),
+                    modifier = Modifier.size(32.dp)
+                )
+                Text(
+                    text = "$streak Days",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Current Streak",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+            
+            VerticalDivider(modifier = Modifier.height(40.dp))
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.FitnessCenter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Text(
+                    text = "$totalWorkouts",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Total Sessions",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
 fun CalendarDay(
     date: LocalDate,
     isSelected: Boolean,
-    hasLog: Boolean,
+    attendedGym: Boolean,
+    hasWeight: Boolean,
     syncState: com.example.irondiary.data.local.SyncState,
-    onDateClick: () -> Unit
+    onDateClick: () -> Unit,
+    onDateLongClick: () -> Unit
 ) {
-    val backgroundColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer
-        hasLog -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-        else -> Color.Transparent
-    }
+    val haptic = LocalHapticFeedback.current
     
-    val textColor = when {
-        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-        date == LocalDate.now() -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val backgroundBrush = if (attendedGym) {
+        Brush.radialGradient(
+            colors = listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                Color.Transparent
+            )
+        )
+    } else null
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .padding(2.dp)
+            .padding(4.dp)
             .clip(CircleShape)
-            .background(backgroundColor)
-            .clickable { onDateClick() },
+            .then(if (backgroundBrush != null) Modifier.background(backgroundBrush) else Modifier)
+            .then(if (isSelected) Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)) else Modifier)
+            .combinedClickable(
+                onClick = onDateClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDateLongClick()
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = date.dayOfMonth.toString(),
-                color = textColor,
-                fontWeight = if (date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal
-            )
-            if (hasLog && syncState != com.example.irondiary.data.local.SyncState.SYNCED) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (syncState == com.example.irondiary.data.local.SyncState.FAILED) 
-                                MaterialTheme.colorScheme.error 
-                            else 
-                                MaterialTheme.colorScheme.outline
-                        )
-                )
-            } else if (hasLog) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+        // Status Ring for Gym
+        if (attendedGym) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                drawCircle(
+                    color = Color(0xFF4CAF50),
+                    radius = size.minDimension / 2.2f,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
                 )
             }
+        }
+        
+        // Glow for Weight
+        if (hasWeight) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+                drawCircle(
+                    color = Color(0xFF2196F3).copy(alpha = 0.3f),
+                    radius = size.minDimension / 3f
+                )
+            }
+        }
+
+        Text(
+            text = date.dayOfMonth.toString(),
+            color = when {
+                isSelected -> MaterialTheme.colorScheme.primary
+                date == LocalDate.now() -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = if (date == LocalDate.now() || isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 16.sp
+        )
+    }
+}
+
+@Composable
+fun DailyInsightCard(
+    date: LocalDate,
+    log: DailyLog,
+    completedTasks: List<com.example.irondiary.data.model.Task>,
+    onEditClick: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = date.format(DateTimeFormatter.ofPattern("EEEE")),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = date.format(DateTimeFormatter.ofPattern("MMMM d")),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                FilledIconButton(onClick = onEditClick) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Log")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                InsightItem(
+                    icon = Icons.Default.FitnessCenter,
+                    label = "Gym",
+                    value = if (log.attendedGym) "Attended" else "Missed",
+                    color = if (log.attendedGym) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.weight(1f)
+                )
+                InsightItem(
+                    icon = Icons.Default.Scale,
+                    label = "Weight",
+                    value = log.weight?.let { "${it}kg" } ?: "--",
+                    color = Color(0xFF2196F3),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (completedTasks.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Text(
+                    text = "Completed Tasks",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(completedTasks) { task ->
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = task.description.take(1).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (!log.notes.isNullOrBlank()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Text(
+                    text = log.notes!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InsightItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = color.copy(alpha = 0.1f),
+            modifier = Modifier.size(40.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(text = label, style = MaterialTheme.typography.labelSmall)
+            Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
 }

@@ -49,6 +49,12 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _tasks = MutableStateFlow<Resource<List<Task>>>(Resource.Success(emptyList()))
     val tasks: StateFlow<Resource<List<Task>>> = _tasks.asStateFlow()
 
+    private val _gymStreak = MutableStateFlow(0)
+    val gymStreak: StateFlow<Int> = _gymStreak.asStateFlow()
+
+    private val _totalWorkouts = MutableStateFlow(0)
+    val totalWorkouts: StateFlow<Int> = _totalWorkouts.asStateFlow()
+
     private val _isDailyReminderEnabled = MutableStateFlow(false)
     val isDailyReminderEnabled: StateFlow<Boolean> = _isDailyReminderEnabled.asStateFlow()
 
@@ -129,6 +135,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
             try {
                 repository.getDailyLogs(userId).collect { logsMap ->
                     _dailyLogs.value = Resource.Success(logsMap)
+                    calculateStats(logsMap)
                 }
             } catch (e: Exception) {
                 _dailyLogs.value = Resource.Error("Error loading logs: ${e.message}")
@@ -431,6 +438,40 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
                 _saveStatus.value = Resource.Error("Failed to delete all tasks: ${e.message}")
             }
         }
+    }
+
+    fun toggleGymAttendance(date: java.time.LocalDate) {
+        val dateId = date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        val currentLogs = (dailyLogs.value as? Resource.Success)?.data ?: emptyMap()
+        val existingLog = currentLogs[dateId] ?: DailyLog(date = dateId)
+        
+        saveDailyLog(existingLog.copy(attendedGym = !existingLog.attendedGym))
+    }
+
+    private fun calculateStats(logsMap: Map<String, DailyLog>) {
+        val today = java.time.LocalDate.now()
+        var streak = 0
+        var checkDate = today
+        
+        // Count total workouts
+        _totalWorkouts.value = logsMap.values.count { it.attendedGym }
+        
+        // Calculate current streak
+        // If user didn't work out today, streak might still be active from yesterday
+        if (logsMap[checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)]?.attendedGym != true) {
+            checkDate = checkDate.minusDays(1)
+        }
+        
+        while (true) {
+            val dateStr = checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+            if (logsMap[dateStr]?.attendedGym == true) {
+                streak++
+                checkDate = checkDate.minusDays(1)
+            } else {
+                break
+            }
+        }
+        _gymStreak.value = streak
     }
 
 
