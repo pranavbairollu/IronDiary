@@ -1,6 +1,7 @@
 package com.example.irondiary.ui.calendar
 
 import android.app.Application
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -48,12 +49,13 @@ fun CalendarScreen() {
     val dailyLogsResource by mainViewModel.dailyLogs.collectAsState()
     
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
+    val selectedDate by mainViewModel.selectedDate.collectAsState()
     var showBottomSheet by remember { mutableStateOf(false) }
     
     val gymStreak by mainViewModel.gymStreak.collectAsState()
     val totalWorkouts by mainViewModel.totalWorkouts.collectAsState()
     val tasksResource by mainViewModel.tasks.collectAsState()
+    val completedTasks by mainViewModel.selectedDateTasks.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Observe save status for error feedback
@@ -89,8 +91,14 @@ fun CalendarScreen() {
             
             CalendarHeader(
                 currentMonth = currentMonth,
-                onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
-                onNextMonth = { currentMonth = currentMonth.plusMonths(1) }
+                onPreviousMonth = { 
+                    currentMonth = currentMonth.minusMonths(1)
+                    mainViewModel.onMonthChanged()
+                },
+                onNextMonth = { 
+                    currentMonth = currentMonth.plusMonths(1)
+                    mainViewModel.onMonthChanged()
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -114,7 +122,7 @@ fun CalendarScreen() {
                             attendedGym = log?.attendedGym == true,
                             hasWeight = log?.weight != null,
                             syncState = syncState,
-                            onDateClick = { selectedDate = date },
+                            onDateClick = { mainViewModel.onDateSelected(date) },
                             onDateLongClick = { mainViewModel.toggleGymAttendance(date) }
                         )
                     } else {
@@ -131,23 +139,26 @@ fun CalendarScreen() {
                     is Resource.Success -> res.data[dateId] ?: DailyLog(date = dateId)
                     else -> DailyLog(date = dateId)
                 }
-                
-                val completedTasks = when (val res = tasksResource) {
-                    is Resource.Success -> res.data.filter { 
-                        it.completed && it.completedDate?.toDate()?.let { d ->
-                            val ld = d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-                            ld == selectedDate
-                        } == true
-                    }
-                    else -> emptyList()
-                }
 
                 DailyInsightCard(
                     date = selectedDate!!,
                     log = log,
                     completedTasks = completedTasks,
+                    isSaving = saveStatus is Resource.Loading,
                     onEditClick = { showBottomSheet = true }
                 )
+            } else {
+                // Empty State / Placeholder
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Select a date to view insights",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
 
             if (showBottomSheet && selectedDate != null) {
@@ -342,6 +353,7 @@ fun CalendarDay(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DailyInsightCard(
     date: LocalDate,
@@ -373,6 +385,7 @@ fun DailyInsightCard(
                             com.example.irondiary.data.local.SyncState.SYNCED -> Icons.Default.CloudDone
                             com.example.irondiary.data.local.SyncState.PENDING -> Icons.Default.Sync
                             com.example.irondiary.data.local.SyncState.FAILED -> Icons.Default.CloudOff
+                            com.example.irondiary.data.local.SyncState.DELETED -> Icons.Default.DeleteOutline
                         }
                         Icon(
                             syncIcon, 
@@ -451,13 +464,26 @@ fun DailyInsightCard(
             }
             
             if (!log.notes.isNullOrBlank()) {
+                var isExpanded by remember { mutableStateOf(false) }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text(
                     text = log.notes!!,
                     style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                    overflow = if (isExpanded) androidx.compose.ui.text.style.TextOverflow.Visible else androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.combinedClickable(
+                        onClick = { isExpanded = !isExpanded },
+                        onLongClick = {} // Avoid conflict with parent if any
+                    )
                 )
+                if (log.notes!!.length > 100) {
+                    Text(
+                        text = if (isExpanded) "Show Less" else "Show More",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp).combinedClickable(onClick = { isExpanded = !isExpanded }, onLongClick = {})
+                    )
+                }
             }
         }
     }

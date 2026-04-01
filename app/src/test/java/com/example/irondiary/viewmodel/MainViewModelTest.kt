@@ -1,6 +1,7 @@
 package com.example.irondiary.viewmodel
 
 import android.app.Application
+import android.util.Log
 import app.cash.turbine.test
 import com.example.irondiary.data.Resource
 import com.example.irondiary.util.MainDispatcherRule
@@ -35,8 +36,14 @@ class MainViewModelTest {
     @Before
     fun setup() {
         mockkStatic(FirebaseAuth::class)
+        mockkStatic(Log::class)
 
         authMock = mockk(relaxed = true)
+        
+        // Mock Log methods to prevent "Method not mocked" errors
+        every { Log.e(any(), any(), any()) } returns 0
+        every { Log.d(any(), any()) } returns 0
+        every { Log.i(any(), any()) } returns 0
         applicationMock = mockk(relaxed = true)
         repositoryMock = mockk(relaxed = true)
 
@@ -192,7 +199,8 @@ class MainViewModelTest {
         // Start second save immediately for the same date
         viewModel.saveDailyLog(log2)
 
-        // Advance time to allow completion
+        // Advance time to allow completion of debounce
+        testScheduler.advanceTimeBy(500)
         testScheduler.runCurrent()
 
         // Verify repository was called for the SECOND log
@@ -210,5 +218,85 @@ class MainViewModelTest {
         } catch (e: IllegalArgumentException) {
             assertEquals("Weight must be between 0 and 500 kg", e.message)
         }
+    }
+
+    @Test
+    fun calculateStats_streakWithGap_resetsToZero() = runTest {
+        val today = java.time.LocalDate.now()
+        
+        // Logs with a gap (Today and Yesterday missing)
+        val logs = mapOf(
+            today.minusDays(2).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) to com.example.irondiary.data.DailyLog(attendedGym = true),
+            today.minusDays(3).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) to com.example.irondiary.data.DailyLog(attendedGym = true)
+        )
+        
+        coEvery { repositoryMock.getDailyLogs(any()) } returns flowOf(logs)
+        viewModel = MainViewModel(repositoryMock)
+        
+        testScheduler.runCurrent()
+        assertEquals(0, viewModel.gymStreak.value)
+    }
+
+    @Test
+    fun calculateStats_continuousStreak_calculatesCorrectly() = runTest {
+        val today = java.time.LocalDate.now()
+        
+        // Mock 3 consecutive days of gym attendance tracking back from today
+        val logs = mapOf(
+            today.minusDays(0).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) to com.example.irondiary.data.DailyLog(attendedGym = true),
+            today.minusDays(1).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) to com.example.irondiary.data.DailyLog(attendedGym = true),
+            today.minusDays(2).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) to com.example.irondiary.data.DailyLog(attendedGym = true)
+        )
+        
+        coEvery { repositoryMock.getDailyLogs(any()) } returns flowOf(logs)
+        // Re-inject dependencies to process the new mocked flow
+        viewModel = MainViewModel(repositoryMock)
+        
+        testScheduler.runCurrent()
+        assertEquals(3, viewModel.gymStreak.value)
+    }
+
+    @Test
+    fun onDateSelected_updatesSelectedDateTasks() = runTest {
+        val date1 = java.time.LocalDate.of(2026, 3, 24)
+        val date2 = java.time.LocalDate.of(2026, 3, 25)
+        
+        val task1 = com.example.irondiary.data.model.Task(
+            docId = "t1", 
+            description = "Task 1", 
+            completed = true,
+            completedDate = Timestamp(date1.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().let { java.util.Date.from(it) })
+        )
+        val task2 = com.example.irondiary.data.model.Task(
+            docId = "t2", 
+            description = "Task 2", 
+            completed = true,
+            completedDate = Timestamp(date2.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().let { java.util.Date.from(it) })
+        )
+
+        // Inject tasks flow
+        coEvery { repositoryMock.getTasks(any()) } returns flowOf(listOf(task1, task2))
+        
+        // Re-init viewModel to pick up new flow
+        viewModel = MainViewModel(repositoryMock)
+        
+        viewModel.onDateSelected(date1)
+        testScheduler.runCurrent()
+        assertEquals(1, viewModel.selectedDateTasks.value.size)
+        assertEquals("Task 1", viewModel.selectedDateTasks.value[0].description)
+        
+        viewModel.onDateSelected(date2)
+        testScheduler.runCurrent()
+        assertEquals(1, viewModel.selectedDateTasks.value.size)
+        assertEquals("Task 2", viewModel.selectedDateTasks.value[0].description)
+    }
+
+    @Test
+    fun onMonthChanged_resetsSelectedDate() = runTest {
+        viewModel.onDateSelected(java.time.LocalDate.now())
+        assertEquals(java.time.LocalDate.now(), viewModel.selectedDate.value)
+        
+        viewModel.onMonthChanged()
+        assertNull(viewModel.selectedDate.value)
     }
 }

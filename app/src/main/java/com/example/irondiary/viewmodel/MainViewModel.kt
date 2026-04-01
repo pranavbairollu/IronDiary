@@ -66,6 +66,12 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
     private val _customTemplates = MutableStateFlow<List<TaskTemplate>>(emptyList())
     
+    private val _selectedDate = MutableStateFlow<java.time.LocalDate?>(java.time.LocalDate.now())
+    val selectedDate: StateFlow<java.time.LocalDate?> = _selectedDate.asStateFlow()
+
+    private val _selectedDateTasks = MutableStateFlow<List<Task>>(emptyList())
+    val selectedDateTasks: StateFlow<List<Task>> = _selectedDateTasks.asStateFlow()
+    
     private val defaultTemplates = listOf(
         TaskTemplate("Health", "Drink water, keep healthy", "💧"),
         TaskTemplate("Health", "Go to bed early", "🌙"),
@@ -116,6 +122,24 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         fetchStudySessions()
         fetchTasks()
         loadTemplates()
+        
+        // Task filtering: React to tasks or selectedDate changes
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(tasks, selectedDate) { res, date ->
+                if (res is Resource.Success && date != null) {
+                    res.data.filter { 
+                        it.completed && it.completedDate?.toDate()?.let { d ->
+                            val ld = d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                            ld == date
+                        } == true
+                    }
+                } else {
+                    emptyList()
+                }
+            }.collect { filtered ->
+                _selectedDateTasks.value = filtered
+            }
+        }
         
         // Trigger background sync on app startup (Safeguard #4)
         repository.enqueueSync()
@@ -448,6 +472,15 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         val existingLog = currentLogs[dateId] ?: DailyLog(date = dateId)
         
         saveDailyLog(existingLog.copy(attendedGym = !existingLog.attendedGym))
+    }
+
+    fun onDateSelected(date: java.time.LocalDate?) {
+        _selectedDate.value = date
+    }
+
+    fun onMonthChanged() {
+        // Reset selection when changing months to prevent "ghost" selections in the dashboard
+        _selectedDate.value = null
     }
 
     private fun calculateStats(logsMap: Map<String, DailyLog>) {
