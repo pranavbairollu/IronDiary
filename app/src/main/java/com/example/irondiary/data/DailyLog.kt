@@ -8,6 +8,7 @@ data class DailyLog(
     @get:PropertyName("attended_gym") @set:PropertyName("attended_gym") var attendedGym: Boolean = false,
     val weight: Float? = null,
     val notes: String? = null,
+    val isRestDay: Boolean = false,
     val updatedAt: Timestamp = Timestamp.now(),
     val syncState: com.example.irondiary.data.local.SyncState = com.example.irondiary.data.local.SyncState.SYNCED
 )

@@ -513,8 +513,13 @@ class MainViewModel(
             
             while (true) {
                 val dateStr = checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-                if (logsMap[dateStr]?.attendedGym == true) {
+                val log = logsMap[dateStr]
+                
+                if (log?.attendedGym == true) {
                     currentStreak++
+                    checkDate = checkDate.minusDays(1)
+                } else if (log?.isRestDay == true) {
+                    // Skip rest days without breaking or incrementing
                     checkDate = checkDate.minusDays(1)
                 } else {
                     break
@@ -535,14 +540,27 @@ class MainViewModel(
                 var lastDate: java.time.LocalDate? = null
                 for (date in sortedDates) {
                     val dateStr = date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-                    if (logsMap[dateStr]?.attendedGym == true) {
-                        if (lastDate != null && date == lastDate.plusDays(1)) {
+                    val log = logsMap[dateStr]
+                    
+                    if (log?.attendedGym == true) {
+                        if (lastDate != null && (date == lastDate.plusDays(1))) {
                             tempStreak++
                         } else {
                             tempStreak = 1
                         }
                         maxStreak = maxOf(maxStreak, tempStreak)
                         lastDate = date
+                    } else if (log?.isRestDay == true) {
+                        // Rest day: don't break the current sequence, but don't count it as a "success" day either.
+                        // We treat the "lastDate" as if it was yesterday relative to the NEXT day we check.
+                        // So we just increment the gap tolerance by keeping lastDate as the day before the rest day?
+                        // Actually, if we have Sat (T), Sun (R), Mon (T).
+                        // Sat: lastDate = Sat, tempStreak = 1.
+                        // Sun: Rest day. We want Mon to see Sat as its "previous day".
+                        // So on Sun, we don't change tempStreak, and we set lastDate to Sun.
+                        if (lastDate != null && date == lastDate.plusDays(1)) {
+                            lastDate = date
+                        }
                     } else {
                         tempStreak = 0
                         lastDate = null

@@ -153,6 +153,7 @@ fun CalendarScreen() {
                             date = date,
                             isSelected = date == selectedDate,
                             attendedGym = log?.attendedGym == true,
+                            isRestDay = log?.isRestDay == true,
                             hasWeight = log?.weight != null,
                             syncState = syncState,
                             onDateClick = { mainViewModel.onDateSelected(date) },
@@ -319,6 +320,7 @@ fun CalendarDay(
     date: LocalDate,
     isSelected: Boolean,
     attendedGym: Boolean,
+    isRestDay: Boolean,
     hasWeight: Boolean,
     syncState: com.example.irondiary.data.local.SyncState,
     onDateClick: () -> Unit,
@@ -359,6 +361,16 @@ fun CalendarDay(
                     color = Color(0xFF4CAF50),
                     radius = size.minDimension / 2.2f,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                )
+            }
+        } else if (isRestDay) {
+            // Indicator for Rest Day
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
+                Icon(
+                    Icons.Default.BeachAccess,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(12.dp).padding(2.dp)
                 )
             }
         }
@@ -470,6 +482,33 @@ fun DailyInsightCard(
                 )
             }
 
+            if (log.isRestDay) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.BeachAccess,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Marked as Rest Day",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+            }
+
             if (completedTasks.isNotEmpty()) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text(
@@ -560,6 +599,7 @@ fun DailyLogBottomSheet(
     onSave: (DailyLog) -> Unit
 ) {
     var attendedGym by remember { mutableStateOf(log.attendedGym) }
+    var isRestDay by remember { mutableStateOf(log.isRestDay) }
     var weight by remember { mutableStateOf(log.weight?.toString() ?: "") }
     var notes by remember { mutableStateOf(log.notes ?: "") }
     
@@ -588,8 +628,18 @@ fun DailyLogBottomSheet(
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = attendedGym, onCheckedChange = { attendedGym = it })
+                Checkbox(checked = attendedGym, onCheckedChange = { 
+                    attendedGym = it
+                    if (it) isRestDay = false // Can't be both
+                })
                 Text("Attended Gym")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = isRestDay, onCheckedChange = { 
+                    isRestDay = it 
+                    if (it) attendedGym = false // Can't be both
+                })
+                Text("Rest Day / Gym Closed")
             }
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
@@ -630,6 +680,7 @@ fun DailyLogBottomSheet(
                     if (isWeightValid && isNotesValid) {
                         onSave(log.copy(
                             attendedGym = attendedGym,
+                            isRestDay = isRestDay,
                             weight = weight.toFloatOrNull(),
                             notes = notes.trim().takeIf { it.isNotBlank() }
                         ))

@@ -12,6 +12,7 @@ fun DailyLogEntity.toDomainModel(): DailyLog {
         attendedGym = attendedGym,
         weight = weight,
         notes = notes,
+        isRestDay = isRestDay,
         updatedAt = Timestamp(Date(localUpdatedAt)),
         syncState = syncState
     )
@@ -25,6 +26,7 @@ fun DailyLog.toEntity(userId: String, syncState: SyncState): DailyLogEntity {
         attendedGym = attendedGym,
         weight = weight,
         notes = notes,
+        isRestDay = isRestDay,
         localUpdatedAt = updatedAt.toDate().time,
         syncState = syncState
     )

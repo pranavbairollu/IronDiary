@@ -18,6 +18,7 @@ data class DailyLogEntity(
     val attendedGym: Boolean,
     val weight: Float?,
     val notes: String?,
+    val isRestDay: Boolean,
     val localUpdatedAt: Long,
     val syncState: SyncState
 )

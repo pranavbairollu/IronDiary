@@ -230,4 +230,38 @@ class StreakCalculationTest {
         assertEquals(1000, viewModel.bestStreak.value)
         println("Calculation for 1000 days took ${endTime - startTime}ms")
     }
+
+    @Test
+    fun calculateStats_restDay_preservesStreak() = runTest {
+        val today = LocalDate.now()
+        val logs = mapOf(
+            today.format(formatter) to DailyLog(attendedGym = true),
+            today.minusDays(1).format(formatter) to DailyLog(isRestDay = true),
+            today.minusDays(2).format(formatter) to DailyLog(attendedGym = true)
+        )
+        
+        initViewModelWithLogs(logs)
+        advanceUntilIdle()
+        
+        // Sat (T) -> Sun (Rest) -> Mon (T)
+        // Current streak should be 2
+        assertEquals(2, viewModel.gymStreak.value)
+        assertEquals(2, viewModel.bestStreak.value)
+    }
+
+    @Test
+    fun calculateStats_multipleRestDays_preservesStreak() = runTest {
+        val today = LocalDate.now()
+        val logs = mapOf(
+            today.format(formatter) to DailyLog(attendedGym = true),
+            today.minusDays(1).format(formatter) to DailyLog(isRestDay = true),
+            today.minusDays(2).format(formatter) to DailyLog(isRestDay = true),
+            today.minusDays(3).format(formatter) to DailyLog(attendedGym = true)
+        )
+        
+        initViewModelWithLogs(logs)
+        advanceUntilIdle()
+        
+        assertEquals(2, viewModel.gymStreak.value)
+    }
 }
