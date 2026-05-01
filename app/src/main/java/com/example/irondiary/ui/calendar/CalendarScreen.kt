@@ -35,11 +35,25 @@ import com.example.irondiary.data.Resource
 import com.example.irondiary.ui.components.SyncIndicator
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+
+val YearMonthSaver = Saver<MutableState<YearMonth>, String>(
+    save = { it.value.toString() },
+    restore = { mutableStateOf(YearMonth.parse(it)) }
+)
+
+val LocalDateSaver = Saver<MutableState<LocalDate>, String>(
+    save = { it.value.toString() },
+    restore = { mutableStateOf(LocalDate.parse(it)) }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,76 +62,42 @@ fun CalendarScreen() {
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModelFactory(application))
     val dailyLogsResource by mainViewModel.dailyLogs.collectAsState()
     
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    var currentMonth by rememberSaveable(saver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
     val selectedDate by mainViewModel.selectedDate.collectAsState()
-    var showBottomSheet by remember { mutableStateOf(false) }
+    var showBottomSheet by rememberSaveable { mutableStateOf(false) }
+    
+    val saveStatus by mainViewModel.saveStatus.collectAsState()
+    
+    // Reliable closure: Only close sheet when save is confirmed successful
+    LaunchedEffect(saveStatus) {
+        if (saveStatus is Resource.Success) {
+            showBottomSheet = false
+        }
+    }
     
     val gymStreak by mainViewModel.gymStreak.collectAsState()
     val totalWorkouts by mainViewModel.totalWorkouts.collectAsState()
     val tasksResource by mainViewModel.tasks.collectAsState()
     val completedTasks by mainViewModel.selectedDateTasks.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    // Note: snackbarHostState and exportStatus observation moved to Navigation.kt for global feedback
 
-    // Observe save status for error feedback
-    val saveStatus by mainViewModel.saveStatus.collectAsState()
-    LaunchedEffect(saveStatus) {
-        if (saveStatus is Resource.Error) {
-            snackbarHostState.showSnackbar((saveStatus as Resource.Error).message)
-            mainViewModel.resetSaveStatus()
-        }
-    }
-
-    val exportStatus by mainViewModel.exportStatus.collectAsState()
-    LaunchedEffect(exportStatus) {
-        when (exportStatus) {
-            is Resource.Success -> {
-                snackbarHostState.showSnackbar((exportStatus as Resource.Success).data)
-                mainViewModel.resetExportStatus()
-            }
-            is Resource.Error -> {
-                snackbarHostState.showSnackbar((exportStatus as Resource.Error).message)
-                mainViewModel.resetExportStatus()
-            }
-            else -> {}
-        }
-    }
-
-    val daysInMonth = remember(currentMonth) {
+    val daysInMonth: List<LocalDate?> = remember(currentMonth) {
         val startDay = currentMonth.atDay(1)
         val endDay = currentMonth.atEndOfMonth()
         val firstDayOfWeek = startDay.dayOfWeek.value % 7 // 0 for Sunday
         
-        List(firstDayOfWeek) { null } + (1..endDay.dayOfMonth).map { currentMonth.atDay(it) }
+        val padding = List<LocalDate?>(firstDayOfWeek) { null }
+        val dates = (1..endDay.dayOfMonth).map { currentMonth.atDay(it) }
+        
+        padding.toMutableList<LocalDate?>().apply { addAll(dates) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("IronDiary") },
-                actions = {
-                    if (exportStatus is Resource.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp).padding(end = 16.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        IconButton(onClick = { mainViewModel.exportCalendarData(application) }) {
-                            Icon(Icons.Default.Download, contentDescription = "Export to PDF")
-                        }
-                    }
-                }
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        modifier = Modifier.fillMaxSize()
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+    ) {
             Spacer(modifier = Modifier.height(8.dp))
             GymStreakHeader(streak = gymStreak, totalWorkouts = totalWorkouts)
             Spacer(modifier = Modifier.height(16.dp))
@@ -138,32 +118,18 @@ fun CalendarScreen() {
 
             DayLabels()
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(7),
-                modifier = Modifier.height(300.dp) // Fixed height to leave room for the card
-            ) {
-                items(daysInMonth) { date ->
-                    if (date != null) {
-                        val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                        val logResource = dailyLogsResource
-                        val log = if (logResource is Resource.Success) logResource.data[dateId] else null
-                        val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
-
-                        CalendarDay(
-                            date = date,
-                            isSelected = date == selectedDate,
-                            attendedGym = log?.attendedGym == true,
-                            isRestDay = log?.isRestDay == true,
-                            hasWeight = log?.weight != null,
-                            syncState = syncState,
-                            onDateClick = { mainViewModel.onDateSelected(date) },
-                            onDateLongClick = { mainViewModel.toggleGymAttendance(date) }
-                        )
-                    } else {
-                        Box(modifier = Modifier.aspectRatio(1f))
-                    }
+            FixedCalendarGrid(
+                days = daysInMonth,
+                selectedDate = selectedDate,
+                dailyLogsResource = dailyLogsResource,
+                onDateClick = { date ->
+                    mainViewModel.onDateSelected(date)
+                    showBottomSheet = true
+                },
+                onDateLongClick = { date ->
+                    mainViewModel.toggleGymAttendance(date)
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -178,7 +144,7 @@ fun CalendarScreen() {
                     date = selectedDate!!,
                     log = log,
                     completedTasks = completedTasks,
-                    isSaving = saveStatus is Resource.Loading,
+                    isSaving = mainViewModel.saveStatus.collectAsState().value is Resource.Loading,
                     onEditClick = { showBottomSheet = true }
                 )
             } else {
@@ -208,13 +174,11 @@ fun CalendarScreen() {
                     onDismiss = { showBottomSheet = false },
                     onSave = { updatedLog ->
                         mainViewModel.saveDailyLog(updatedLog)
-                        showBottomSheet = false
                     }
                 )
             }
         }
     }
-}
 
 @Composable
 fun CalendarHeader(
@@ -237,6 +201,51 @@ fun CalendarHeader(
         )
         IconButton(onClick = onNextMonth) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month")
+        }
+    }
+}
+
+@Composable
+fun FixedCalendarGrid(
+    days: List<LocalDate?>,
+    selectedDate: LocalDate?,
+    dailyLogsResource: Resource<Map<String, DailyLog>>,
+    onDateClick: (LocalDate) -> Unit,
+    onDateLongClick: (LocalDate) -> Unit
+) {
+    val chunks = days.chunked(7)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        chunks.forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                week.forEach { date ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (date != null) {
+                            val dateId = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                            val log = if (dailyLogsResource is Resource.Success) dailyLogsResource.data[dateId] else null
+                            val syncState = log?.syncState ?: com.example.irondiary.data.local.SyncState.SYNCED
+
+                            CalendarDay(
+                                date = date,
+                                isSelected = date == selectedDate,
+                                attendedGym = log?.attendedGym == true,
+                                isRestDay = log?.isRestDay == true,
+                                hasWeight = log?.weight != null,
+                                syncState = syncState,
+                                onDateClick = { onDateClick(date) },
+                                onDateLongClick = { onDateLongClick(date) }
+                            )
+                        } else {
+                            Box(modifier = Modifier.aspectRatio(1f))
+                        }
+                    }
+                }
+                // Fill remaining cells in the last week if necessary
+                if (week.size < 7) {
+                    repeat(7 - week.size) {
+                        Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                    }
+                }
+            }
         }
     }
 }
@@ -417,7 +426,7 @@ fun DailyInsightCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = date.format(DateTimeFormatter.ofPattern("EEEE")),
@@ -536,7 +545,7 @@ fun DailyInsightCard(
             }
             
             if (!log.notes.isNullOrBlank()) {
-                var isExpanded by remember { mutableStateOf(false) }
+                var isExpanded by rememberSaveable { mutableStateOf(false) }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text(
                     text = log.notes!!,
@@ -598,10 +607,10 @@ fun DailyLogBottomSheet(
     onDismiss: () -> Unit,
     onSave: (DailyLog) -> Unit
 ) {
-    var attendedGym by remember { mutableStateOf(log.attendedGym) }
-    var isRestDay by remember { mutableStateOf(log.isRestDay) }
-    var weight by remember { mutableStateOf(log.weight?.toString() ?: "") }
-    var notes by remember { mutableStateOf(log.notes ?: "") }
+    var attendedGym by rememberSaveable { mutableStateOf(log.attendedGym) }
+    var isRestDay by rememberSaveable { mutableStateOf(log.isRestDay) }
+    var weight by rememberSaveable { mutableStateOf(log.weight?.toString() ?: "") }
+    var notes by rememberSaveable { mutableStateOf(log.notes ?: "") }
     
     val isSaving = saveStatus is Resource.Loading
     

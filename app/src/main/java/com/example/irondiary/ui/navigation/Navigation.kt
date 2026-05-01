@@ -4,6 +4,8 @@ import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
@@ -11,15 +13,20 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -53,6 +60,7 @@ import com.example.irondiary.viewmodel.AuthViewModelFactory
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
 import com.example.irondiary.ui.components.SettingsDialog
+import com.example.irondiary.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -103,10 +111,10 @@ fun AppNavigation() {
 @Composable
 fun TopLevelNav() {
     val navController = rememberNavController()
-    var showLogChoiceDialog by remember { mutableStateOf(false) }
-    var showLogStudySessionDialog by remember { mutableStateOf(false) }
-    var showLogTaskDialog by remember { mutableStateOf(false) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showLogChoiceDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogStudySessionDialog by rememberSaveable { mutableStateOf(false) }
+    var showLogTaskDialog by rememberSaveable { mutableStateOf(false) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     val application = LocalContext.current.applicationContext as Application
@@ -114,14 +122,31 @@ fun TopLevelNav() {
     val saveStatus by mainViewModel.saveStatus.collectAsState()
     val context = LocalContext.current
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val exportStatus by mainViewModel.exportStatus.collectAsState()
+
     LaunchedEffect(saveStatus) {
         if (saveStatus is Resource.Error) {
-            Toast.makeText(context, (saveStatus as Resource.Error).message ?: "Error saving", Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar((saveStatus as Resource.Error).message ?: "Error saving")
             mainViewModel.resetSaveStatus()
         } else if (saveStatus is Resource.Success) {
             mainViewModel.resetSaveStatus()
             showLogStudySessionDialog = false
             showLogTaskDialog = false
+        }
+    }
+
+    LaunchedEffect(exportStatus) {
+        when (exportStatus) {
+            is Resource.Success -> {
+                snackbarHostState.showSnackbar((exportStatus as Resource.Success).data)
+                mainViewModel.resetExportStatus()
+            }
+            is Resource.Error -> {
+                snackbarHostState.showSnackbar((exportStatus as Resource.Error).message)
+                mainViewModel.resetExportStatus()
+            }
+            else -> {}
         }
     }
 
@@ -186,15 +211,32 @@ fun TopLevelNav() {
 
     Scaffold(
         topBar = {
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+            
             TopAppBar(
                 title = { Text("IronDiary") },
                 actions = {
+                    if (currentRoute == Screen.Calendar.route) {
+                        if (exportStatus is Resource.Loading) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp).padding(end = 16.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            androidx.compose.material3.IconButton(onClick = { mainViewModel.exportCalendarData(application) }) {
+                                Icon(Icons.Default.Download, contentDescription = "Export to PDF")
+                            }
+                        }
+                    }
                     androidx.compose.material3.IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()

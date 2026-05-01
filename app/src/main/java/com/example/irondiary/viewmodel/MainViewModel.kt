@@ -265,10 +265,17 @@ class MainViewModel(
                 // Debounce rapid saves to prevent database/network flooding
                 delay(400) 
                 
+                // Re-verify auth state after delay (Edge case: logout during delay)
+                val currentUserId = auth.currentUser?.uid
+                if (currentUserId == null) {
+                    _saveStatus.value = Resource.Error("User session expired.")
+                    return@launch
+                }
+                
                 // Enforce mutual exclusivity
                 val sanitizedLog = if (log.attendedGym) log.copy(isRestDay = false) else log
                 
-                repository.saveDailyLog(sanitizedLog, userId)
+                repository.saveDailyLog(sanitizedLog, currentUserId)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
