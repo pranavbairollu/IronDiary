@@ -67,6 +67,21 @@ fun CalendarScreen() {
         }
     }
 
+    val exportStatus by mainViewModel.exportStatus.collectAsState()
+    LaunchedEffect(exportStatus) {
+        when (exportStatus) {
+            is Resource.Success -> {
+                snackbarHostState.showSnackbar((exportStatus as Resource.Success).data)
+                mainViewModel.resetExportStatus()
+            }
+            is Resource.Error -> {
+                snackbarHostState.showSnackbar((exportStatus as Resource.Error).message)
+                mainViewModel.resetExportStatus()
+            }
+            else -> {}
+        }
+    }
+
     val daysInMonth = remember(currentMonth) {
         val startDay = currentMonth.atDay(1)
         val endDay = currentMonth.atEndOfMonth()
@@ -76,6 +91,24 @@ fun CalendarScreen() {
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("IronDiary") },
+                actions = {
+                    if (exportStatus is Resource.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp).padding(end = 16.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        IconButton(onClick = { mainViewModel.exportCalendarData(application) }) {
+                            Icon(Icons.Default.Download, contentDescription = "Export to PDF")
+                        }
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = Modifier.fillMaxSize()
     ) { paddingValues ->

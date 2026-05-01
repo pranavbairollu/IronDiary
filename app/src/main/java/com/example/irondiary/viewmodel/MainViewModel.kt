@@ -64,6 +64,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     private val _templateStatus = MutableStateFlow<Resource<Unit>?>(null)
     val templateStatus: StateFlow<Resource<Unit>?> = _templateStatus.asStateFlow()
 
+    private val _exportStatus = MutableStateFlow<Resource<String>?>(null)
+    val exportStatus: StateFlow<Resource<String>?> = _exportStatus.asStateFlow()
+
     private val _customTemplates = MutableStateFlow<List<TaskTemplate>>(emptyList())
     
     private val _selectedDate = MutableStateFlow<java.time.LocalDate?>(java.time.LocalDate.now())
@@ -685,6 +688,32 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
                 _templateStatus.value = Resource.Error("Failed to add task: ${e.message}")
             }
         }
+    }
+
+    fun exportCalendarData(context: Context) {
+        _exportStatus.value = Resource.Loading
+        viewModelScope.launch {
+            val logsMap = (dailyLogs.value as? Resource.Success)?.data ?: emptyMap()
+            val logsList = logsMap.values.filter {
+                it.attendedGym || it.weight != null || !it.notes.isNullOrBlank()
+            }.sortedByDescending { it.date }
+
+            if (logsList.isEmpty()) {
+                _exportStatus.value = Resource.Error("No data to export.")
+                return@launch
+            }
+
+            val result = com.example.irondiary.util.PdfExportUtility.exportLogsToPdf(context, logsList)
+            if (result.isSuccess) {
+                _exportStatus.value = Resource.Success(result.getOrNull() ?: "Exported successfully")
+            } else {
+                _exportStatus.value = Resource.Error(result.exceptionOrNull()?.message ?: "Export failed")
+            }
+        }
+    }
+
+    fun resetExportStatus() {
+        _exportStatus.value = null
     }
 
     override fun onCleared() {
