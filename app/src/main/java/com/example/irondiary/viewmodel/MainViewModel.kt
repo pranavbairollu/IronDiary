@@ -32,7 +32,10 @@ data class TaskTemplate(
  * It acts as a bridge between the [IronDiaryRepository] and the Compose UI,
  * exposing data as reactive [StateFlow]s and handling user interactions.
  */
-class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
+class MainViewModel(
+    private val repository: IronDiaryRepository,
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default
+) : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
     private val sharedPreferences = repository.context.getSharedPreferences("IronDiaryPrefs", Context.MODE_PRIVATE)
@@ -51,6 +54,9 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
 
     private val _gymStreak = MutableStateFlow(0)
     val gymStreak: StateFlow<Int> = _gymStreak.asStateFlow()
+
+    private val _bestStreak = MutableStateFlow(0)
+    val bestStreak: StateFlow<Int> = _bestStreak.asStateFlow()
 
     private val _totalWorkouts = MutableStateFlow(0)
     val totalWorkouts: StateFlow<Int> = _totalWorkouts.asStateFlow()
@@ -119,6 +125,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     // Map to keep track of active save jobs per date to prevent redundant save floods
     private val activeSaveJobs = mutableMapOf<String, Job>()
     
+    private var statsJob: Job? = null
     private var exportJob: Job? = null
 
     init {
@@ -164,7 +171,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
             try {
                 repository.getDailyLogs(userId).collect { logsMap ->
                     _dailyLogs.value = Resource.Success(logsMap)
-                    calculateStats(logsMap)
+                    calculateStatsAsync(logsMap)
                 }
             } catch (e: Exception) {
                 _dailyLogs.value = Resource.Error("Error loading logs: ${e.message}")
@@ -488,29 +495,62 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         _selectedDate.value = null
     }
 
-    private fun calculateStats(logsMap: Map<String, DailyLog>) {
-        val today = java.time.LocalDate.now()
-        var streak = 0
-        
-        // Count total workouts
-        _totalWorkouts.value = logsMap.values.count { it.attendedGym }
-        
-        // Start checking from today or yesterday
-        val todayStr = today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-        val hasLoggedToday = logsMap[todayStr]?.attendedGym == true
-        
-        var checkDate = if (hasLoggedToday) today else today.minusDays(1)
-        
-        while (true) {
-            val dateStr = checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-            if (logsMap[dateStr]?.attendedGym == true) {
-                streak++
-                checkDate = checkDate.minusDays(1)
-            } else {
-                break
+    private fun calculateStatsAsync(logsMap: Map<String, DailyLog>) {
+        statsJob?.cancel()
+        statsJob = viewModelScope.launch(defaultDispatcher) {
+            val today = java.time.LocalDate.now()
+            
+            // Count total workouts
+            val total = logsMap.values.count { it.attendedGym }
+            _totalWorkouts.value = total
+            
+            // Calculate current streak
+            var currentStreak = 0
+            val todayStr = today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+            val hasLoggedToday = logsMap[todayStr]?.attendedGym == true
+            
+            var checkDate = if (hasLoggedToday) today else today.minusDays(1)
+            
+            while (true) {
+                val dateStr = checkDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                if (logsMap[dateStr]?.attendedGym == true) {
+                    currentStreak++
+                    checkDate = checkDate.minusDays(1)
+                } else {
+                    break
+                }
             }
+            _gymStreak.value = currentStreak
+            
+            // Calculate best streak ever
+            var maxStreak = 0
+            var tempStreak = 0
+            
+            // Sort dates to calculate historical best streak
+            val sortedDates = logsMap.keys.sorted().mapNotNull {
+                try { java.time.LocalDate.parse(it) } catch (e: Exception) { null }
+            }
+            
+            if (sortedDates.isNotEmpty()) {
+                var lastDate: java.time.LocalDate? = null
+                for (date in sortedDates) {
+                    val dateStr = date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                    if (logsMap[dateStr]?.attendedGym == true) {
+                        if (lastDate != null && date == lastDate.plusDays(1)) {
+                            tempStreak++
+                        } else {
+                            tempStreak = 1
+                        }
+                        maxStreak = maxOf(maxStreak, tempStreak)
+                        lastDate = date
+                    } else {
+                        tempStreak = 0
+                        lastDate = null
+                    }
+                }
+            }
+            _bestStreak.value = maxStreak
         }
-        _gymStreak.value = streak
     }
 
 
@@ -727,6 +767,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         studySessionsJob?.cancel()
         tasksJob?.cancel()
         exportJob?.cancel()
+        statsJob?.cancel()
         activeToggleJobs.values.forEach { it.cancel() }
         activeSaveJobs.values.forEach { it.cancel() }
     }

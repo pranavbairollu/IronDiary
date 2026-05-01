@@ -61,7 +61,7 @@ class MainViewModelTest {
         every { mockUser.uid } returns "test_uid"
         every { authMock.currentUser } returns mockUser
 
-        viewModel = MainViewModel(repositoryMock)
+        viewModel = MainViewModel(repositoryMock, mainDispatcherRule.testDispatcher)
     }
 
     @After
