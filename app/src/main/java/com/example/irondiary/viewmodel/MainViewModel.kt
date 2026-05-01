@@ -264,7 +264,11 @@ class MainViewModel(
             try {
                 // Debounce rapid saves to prevent database/network flooding
                 delay(400) 
-                repository.saveDailyLog(log, userId)
+                
+                // Enforce mutual exclusivity
+                val sanitizedLog = if (log.attendedGym) log.copy(isRestDay = false) else log
+                
+                repository.saveDailyLog(sanitizedLog, userId)
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -482,8 +486,11 @@ class MainViewModel(
         val dateId = date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
         val currentLogs = (dailyLogs.value as? Resource.Success)?.data ?: emptyMap()
         val existingLog = currentLogs[dateId] ?: DailyLog(date = dateId)
-        
-        saveDailyLog(existingLog.copy(attendedGym = !existingLog.attendedGym))
+        val updatedLog = existingLog.copy(
+            attendedGym = !existingLog.attendedGym,
+            isRestDay = if (!existingLog.attendedGym) false else existingLog.isRestDay
+        )
+        saveDailyLog(updatedLog)
     }
 
     fun onDateSelected(date: java.time.LocalDate?) {

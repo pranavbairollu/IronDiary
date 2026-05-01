@@ -264,4 +264,52 @@ class StreakCalculationTest {
         
         assertEquals(2, viewModel.gymStreak.value)
     }
+
+    @Test
+    fun calculateStats_restDayOnToday_preservesStreakFromYesterday() = runTest {
+        val today = LocalDate.now()
+        val logs = mapOf(
+            today.format(formatter) to DailyLog(isRestDay = true),
+            today.minusDays(1).format(formatter) to DailyLog(attendedGym = true),
+            today.minusDays(2).format(formatter) to DailyLog(attendedGym = true)
+        )
+        
+        initViewModelWithLogs(logs)
+        advanceUntilIdle()
+        
+        // If today is a rest day, and yesterday was a 2-day streak, it should show 2.
+        assertEquals(2, viewModel.gymStreak.value)
+    }
+
+    @Test
+    fun calculateStats_startOfHistoryIsRestDay_streakStartsFromFirstGymDay() = runTest {
+        val today = LocalDate.now()
+        val logs = mapOf(
+            today.format(formatter) to DailyLog(attendedGym = true),
+            today.minusDays(1).format(formatter) to DailyLog(isRestDay = true)
+        )
+        
+        initViewModelWithLogs(logs)
+        advanceUntilIdle()
+        
+        assertEquals(1, viewModel.gymStreak.value)
+    }
+
+    @Test
+    fun calculateStats_bestStreak_withRestDays_calculatesCorrectMax() = runTest {
+        val logs = mapOf(
+            "2026-01-01" to DailyLog(attendedGym = true),
+            "2026-01-02" to DailyLog(isRestDay = true),
+            "2026-01-03" to DailyLog(attendedGym = true), // Streak of 2
+            "2026-01-04" to DailyLog(attendedGym = false), // Break
+            "2026-01-05" to DailyLog(attendedGym = true),
+            "2026-01-06" to DailyLog(attendedGym = true),
+            "2026-01-07" to DailyLog(attendedGym = true) // Streak of 3
+        )
+        
+        initViewModelWithLogs(logs)
+        advanceUntilIdle()
+        
+        assertEquals(3, viewModel.bestStreak.value)
+    }
 }
