@@ -66,15 +66,16 @@ object PdfExportUtility {
                 // Define Column Widths
                 val colDate = margin
                 val colGym = margin + 80f
-                val colWeight = margin + 150f
+                val colWeight = margin + 140f
                 val colNotes = margin + 220f
                 val maxNotesWidth = pageWidth - margin - colNotes
 
-                fun drawHeader(canvas: Canvas, y: Float) {
-                    canvas.drawText("Date", colDate, y, headerPaint)
-                    canvas.drawText("Gym", colGym, y, headerPaint)
-                    canvas.drawText("Weight", colWeight, y, headerPaint)
-                    canvas.drawText("Notes", colNotes, y, headerPaint)
+                fun drawHeader(canvas: Canvas, topY: Float) {
+                    val baseline = topY + 20f
+                    canvas.drawText("Date", colDate, baseline, headerPaint)
+                    canvas.drawText("Gym", colGym, baseline, headerPaint)
+                    canvas.drawText("Weight", colWeight, baseline, headerPaint)
+                    canvas.drawText("Notes", colNotes, baseline, headerPaint)
                 }
 
                 // Draw Title
@@ -83,9 +84,8 @@ object PdfExportUtility {
 
                 // Draw Table Header
                 drawHeader(canvas, currentY)
-                currentY += 10f
+                currentY += 30f
                 canvas.drawLine(margin, currentY, pageWidth - margin, currentY, paint)
-                currentY += 20f
 
                 for (log in logs) {
                     val dateText = log.date
@@ -96,11 +96,12 @@ object PdfExportUtility {
                     // Create StaticLayout for notes
                     val staticLayout = StaticLayout.Builder.obtain(notesText, 0, notesText.length, textPaint, maxNotesWidth.toInt())
                         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                        .setLineSpacing(0f, 1f)
+                        .setLineSpacing(0f, 1.2f)
                         .setIncludePad(false)
                         .build()
 
-                    val rowHeight = Math.max(20f, staticLayout.height.toFloat() + 10f)
+                    val notesHeight = if (notesText.isNotEmpty()) staticLayout.height.toFloat() else 0f
+                    val rowHeight = Math.max(30f, notesHeight + 20f)
 
                     // Check if we need a new page before drawing this row
                     if (currentY + rowHeight > pageHeight - margin) {
@@ -112,29 +113,28 @@ object PdfExportUtility {
                         
                         // Redraw header on new page
                         drawHeader(canvas, currentY)
-                        currentY += 10f
+                        currentY += 30f
                         canvas.drawLine(margin, currentY, pageWidth - margin, currentY, paint)
-                        currentY += 20f
                     }
 
+                    val textBaseline = currentY + 20f
+
                     // Draw Date, Gym, Weight
-                    canvas.drawText(dateText, colDate, currentY, paint)
-                    canvas.drawText(gymText, colGym, currentY, paint)
-                    canvas.drawText(weightText, colWeight, currentY, paint)
+                    canvas.drawText(dateText, colDate, textBaseline, paint)
+                    canvas.drawText(gymText, colGym, textBaseline, paint)
+                    canvas.drawText(weightText, colWeight, textBaseline, paint)
 
                     // Draw Notes
                     if (notesText.isNotEmpty()) {
                         canvas.save()
-                        // StaticLayout draws from its top-left, but drawText uses baseline. 
-                        // So we adjust Y slightly so it aligns with the single-line texts.
-                        canvas.translate(colNotes, currentY - 10f)
+                        canvas.translate(colNotes, currentY + 10f)
                         staticLayout.draw(canvas)
                         canvas.restore()
                     }
 
                     // Update currentY for next row
                     currentY += rowHeight
-                    canvas.drawLine(margin, currentY - 10f, pageWidth - margin, currentY - 10f, paint)
+                    canvas.drawLine(margin, currentY, pageWidth - margin, currentY, paint)
                 }
 
                 document.finishPage(page)
