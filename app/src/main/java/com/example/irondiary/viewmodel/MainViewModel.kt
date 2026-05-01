@@ -118,6 +118,8 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     
     // Map to keep track of active save jobs per date to prevent redundant save floods
     private val activeSaveJobs = mutableMapOf<String, Job>()
+    
+    private var exportJob: Job? = null
 
     init {
         fetchDailyLogs()
@@ -691,11 +693,13 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
     }
 
     fun exportCalendarData(context: Context) {
+        if (exportJob?.isActive == true) return
+        
         _exportStatus.value = Resource.Loading
-        viewModelScope.launch {
+        exportJob = viewModelScope.launch {
             val logsMap = (dailyLogs.value as? Resource.Success)?.data ?: emptyMap()
             val logsList = logsMap.values.filter {
-                it.attendedGym || it.weight != null || !it.notes.isNullOrBlank()
+                it.attendedGym || it.weight != null || !it.notes?.trim().isNullOrEmpty()
             }.sortedByDescending { it.date }
 
             if (logsList.isEmpty()) {
@@ -722,6 +726,7 @@ class MainViewModel(private val repository: IronDiaryRepository) : ViewModel() {
         weightDataJob?.cancel()
         studySessionsJob?.cancel()
         tasksJob?.cancel()
+        exportJob?.cancel()
         activeToggleJobs.values.forEach { it.cancel() }
         activeSaveJobs.values.forEach { it.cancel() }
     }
