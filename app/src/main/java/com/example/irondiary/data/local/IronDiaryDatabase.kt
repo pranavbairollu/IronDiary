@@ -18,7 +18,7 @@ import com.example.irondiary.data.local.entity.DailyLogEntity
         StudySessionEntity::class, 
         DailyLogEntity::class
     ], 
-    version = 2, 
+    version = 3, 
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
