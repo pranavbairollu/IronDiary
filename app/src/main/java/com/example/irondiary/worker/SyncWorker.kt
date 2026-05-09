@@ -71,6 +71,8 @@ class SyncWorker(
 
             // 2. Process Local Changes (Push to Remote with Batching - Chunked to 500 ops)
             val locals = taskDao.getUnsyncedTasks(userId)
+            val unsyncedAtStart = locals.map { it.id }.toSet()
+            
             if (locals.isNotEmpty()) {
                 val chunks = locals.chunked(500)
                 for (chunk in chunks) {
@@ -128,7 +130,9 @@ class SyncWorker(
             // 4. Remote Deletion Mirroring (Pruning)
             val allLocals = taskDao.getTasksImmediate(userId)
             val nodesToRemove = allLocals.filter { 
-                it.syncState == SyncState.SYNCED && !remoteTaskMap.containsKey(it.id) 
+                it.syncState == SyncState.SYNCED && 
+                !remoteTaskMap.containsKey(it.id) &&
+                !unsyncedAtStart.contains(it.id)
             }
             if (nodesToRemove.isNotEmpty()) {
                 Log.d("SyncWorker", "Pruning ${nodesToRemove.size} tasks deleted remotely.")
@@ -151,6 +155,8 @@ class SyncWorker(
 
             // 2. Process Local Changes (Push to Remote with Batching - Chunked to 500)
             val locals = studyDao.getUnsyncedSessions(userId)
+            val unsyncedAtStart = locals.map { it.id }.toSet()
+            
             if (locals.isNotEmpty()) {
                 val chunks = locals.chunked(500)
                 for (chunk in chunks) {
@@ -201,7 +207,9 @@ class SyncWorker(
             // 4. Remote Deletion Mirroring (Pruning)
             val allLocals = studyDao.getSessionsImmediate(userId)
             val nodesToRemove = allLocals.filter { 
-                it.syncState == SyncState.SYNCED && !remoteMap.containsKey(it.id) 
+                it.syncState == SyncState.SYNCED && 
+                !remoteMap.containsKey(it.id) &&
+                !unsyncedAtStart.contains(it.id)
             }
             if (nodesToRemove.isNotEmpty()) {
                 Log.d("SyncWorker", "Pruning ${nodesToRemove.size} sessions deleted remotely.")
@@ -224,6 +232,8 @@ class SyncWorker(
 
             // 2. Process Local Changes (Push to Remote with Batching - Chunked to 500)
             val locals = logDao.getUnsyncedLogs(userId)
+            val unsyncedAtStart = locals.map { it.date }.toSet()
+            
             if (locals.isNotEmpty()) {
                 val chunks = locals.chunked(500)
                 for (chunk in chunks) {
@@ -274,7 +284,9 @@ class SyncWorker(
             // 4. Remote Deletion Mirroring (Pruning)
             val allLocals = logDao.getLogsImmediate(userId)
             val nodesToRemove = allLocals.filter { 
-                it.syncState == SyncState.SYNCED && !remoteMap.containsKey(it.date) 
+                it.syncState == SyncState.SYNCED && 
+                !remoteMap.containsKey(it.date) &&
+                !unsyncedAtStart.contains(it.date)
             }
             if (nodesToRemove.isNotEmpty()) {
                 Log.d("SyncWorker", "Pruning ${nodesToRemove.size} logs deleted remotely.")

@@ -239,7 +239,7 @@ class MainViewModel(
         }
     }
 
-    fun saveDailyLog(log: DailyLog) {
+    fun saveDailyLog(log: DailyLog, immediate: Boolean = false) {
         val userId = auth.currentUser?.uid ?: return
         
         // Validation: Ensure weight is within a realistic range and notes aren't too long
@@ -263,7 +263,9 @@ class MainViewModel(
         activeSaveJobs[log.date] = viewModelScope.launch {
             try {
                 // Debounce rapid saves to prevent database/network flooding
-                delay(400) 
+                if (!immediate) {
+                    delay(200) // Reduced from 400ms for better responsiveness
+                }
                 
                 // Re-verify auth state after delay (Edge case: logout during delay)
                 val currentUserId = auth.currentUser?.uid
@@ -491,13 +493,22 @@ class MainViewModel(
 
     fun toggleGymAttendance(date: java.time.LocalDate) {
         val dateId = date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-        val currentLogs = (dailyLogs.value as? Resource.Success)?.data ?: emptyMap()
+        
+        // Safety check: If logs are currently loading, we might not have the latest state.
+        // However, we want to be responsive, so we'll try to use the current state if available.
+        val currentLogs = when (val res = dailyLogs.value) {
+            is Resource.Success -> res.data
+            is Resource.Loading -> return // Block toggle while loading to prevent data loss
+            is Resource.Error -> emptyMap()
+        }
+        
         val existingLog = currentLogs[dateId] ?: DailyLog(date = dateId)
         val updatedLog = existingLog.copy(
             attendedGym = !existingLog.attendedGym,
-            isRestDay = if (!existingLog.attendedGym) false else existingLog.isRestDay
+            isRestDay = if (!existingLog.attendedGym) false else existingLog.isRestDay,
+            updatedAt = com.google.firebase.Timestamp.now() // Ensure timestamp is fresh
         )
-        saveDailyLog(updatedLog)
+        saveDailyLog(updatedLog, immediate = true) // Skip debounce for immediate feedback
     }
 
     fun onDateSelected(date: java.time.LocalDate?) {

@@ -173,7 +173,7 @@ fun CalendarScreen() {
                     saveStatus = saveStatus,
                     onDismiss = { showBottomSheet = false },
                     onSave = { updatedLog ->
-                        mainViewModel.saveDailyLog(updatedLog)
+                        mainViewModel.saveDailyLog(updatedLog, immediate = true)
                     }
                 )
             }
