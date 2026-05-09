@@ -111,6 +111,9 @@ fun CalendarScreen() {
                 onNextMonth = { 
                     currentMonth = currentMonth.plusMonths(1)
                     mainViewModel.onMonthChanged()
+                },
+                onSyncClick = {
+                    mainViewModel.enqueueSync()
                 }
             )
 
@@ -184,15 +187,21 @@ fun CalendarScreen() {
 fun CalendarHeader(
     currentMonth: YearMonth,
     onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit
+    onNextMonth: () -> Unit,
+    onSyncClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onPreviousMonth) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onPreviousMonth) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
+            }
+            IconButton(onClick = onSyncClick) {
+                Icon(Icons.Default.Sync, contentDescription = "Sync Now", modifier = Modifier.size(20.dp))
+            }
         }
         Text(
             text = "${currentMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${currentMonth.year}",

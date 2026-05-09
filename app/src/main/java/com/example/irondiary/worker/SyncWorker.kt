@@ -54,8 +54,10 @@ class SyncWorker(
         val logsSuccess = syncDailyLogs(db, firestore, userId)
 
         if (tasksSuccess && studySuccess && logsSuccess) {
+            Log.i("SyncWorker", "Full sync completed successfully for user $userId")
             Result.success()
         } else {
+            Log.w("SyncWorker", "Partial sync failure (Tasks:$tasksSuccess, Study:$studySuccess, Logs:$logsSuccess). Retrying...")
             Result.retry()
         }
     }
@@ -65,6 +67,7 @@ class SyncWorker(
         val tasksCollection = firestore.collection("users").document(userId).collection("tasks")
 
         return try {
+            Log.d("SyncWorker", "Starting Task sync for user $userId")
             // 1. Fetch Remote
             val remoteTasks = tasksCollection.get().await().toObjects(Task::class.java)
             val remoteTaskMap = remoteTasks.associateBy { it.docId }
@@ -227,7 +230,9 @@ class SyncWorker(
         val logsCollection = firestore.collection("users").document(userId).collection("daily_logs")
 
         return try {
+            Log.d("SyncWorker", "Starting DailyLog sync for user $userId")
             val remoteLogs = logsCollection.get().await().toObjects(DailyLog::class.java)
+            Log.d("SyncWorker", "Fetched ${remoteLogs.size} remote logs")
             val remoteMap = remoteLogs.associateBy { it.date }
 
             // 2. Process Local Changes (Push to Remote with Batching - Chunked to 500)
@@ -253,7 +258,9 @@ class SyncWorker(
                                     if (remote == null || local.localUpdatedAt >= remote.updatedAt.toDate().time) {
                                         batch.set(logsCollection.document(local.date), local.toDomainModel(), SetOptions.merge())
                                         pushedLocals.add(local.copy(syncState = SyncState.SYNCED))
+                                        Log.v("SyncWorker", "Staged log push for ${local.date}")
                                     } else {
+                                        Log.i("SyncWorker", "Conflict: Remote log for ${local.date} is newer. Overwriting local.")
                                         logDao.update(remote.toEntity(userId, SyncState.SYNCED))
                                     }
                                 }

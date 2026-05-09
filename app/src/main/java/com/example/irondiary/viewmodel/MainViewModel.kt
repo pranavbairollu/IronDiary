@@ -153,7 +153,14 @@ class MainViewModel(
             }
         }
         
-        // Trigger background sync on app startup (Safeguard #4)
+        // Trigger background sync on app startup
+        enqueueSync()
+    }
+    
+    /**
+     * Triggers a manual synchronization run.
+     */
+    fun enqueueSync() {
         repository.enqueueSync()
     }
 
@@ -281,7 +288,8 @@ class MainViewModel(
                 _saveStatus.value = Resource.Success(Unit)
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    _saveStatus.value = Resource.Error("Failed to save daily log: ${e.message}")
+                    Log.e("MainViewModel", "Critical failure saving daily log for ${log.date}", e)
+                    _saveStatus.value = Resource.Error("Failed to save: ${e.localizedMessage ?: "Unknown error"}")
                 }
             } finally {
                 activeSaveJobs.remove(log.date)
@@ -498,8 +506,15 @@ class MainViewModel(
         // However, we want to be responsive, so we'll try to use the current state if available.
         val currentLogs = when (val res = dailyLogs.value) {
             is Resource.Success -> res.data
-            is Resource.Loading -> return // Block toggle while loading to prevent data loss
-            is Resource.Error -> emptyMap()
+            is Resource.Loading -> {
+                Log.w("MainViewModel", "Toggle blocked: Daily logs are still loading.")
+                return 
+            }
+            is Resource.Error -> {
+                Log.e("MainViewModel", "Toggle blocked: Logs are in error state: ${res.message}")
+                _saveStatus.value = Resource.Error("Cannot toggle: Please check connection.")
+                return
+            }
         }
         
         val existingLog = currentLogs[dateId] ?: DailyLog(date = dateId)
