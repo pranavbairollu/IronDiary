@@ -91,6 +91,10 @@ fun ChatWindow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SuggestionChip(
+                    onClick = { onSendMessage("How much did I study?") }, 
+                    label = { Text("How much did I study?", fontSize = 12.sp) }
+                )
+                SuggestionChip(
                     onClick = { onSendMessage("Show me my weight trend") }, 
                     label = { Text("Visual Trend", fontSize = 12.sp) }
                 )

@@ -44,9 +44,10 @@ class ChatViewModel(
             viewModelScope.launch {
                 combine(
                     repository.getWeightData(userId),
-                    repository.getTasks(userId)
-                ) { weights, tasks ->
-                    LocalDataBundle(weights, tasks)
+                    repository.getTasks(userId),
+                    repository.getStudySessions(userId)
+                ) { weights, tasks, sessions ->
+                    LocalDataBundle(weights, tasks, sessions)
                 }.collect { bundle ->
                     currentDataBundle = bundle
                 }

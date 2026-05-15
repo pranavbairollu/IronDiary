@@ -2,13 +2,15 @@ package com.example.irondiary.util
 
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.model.Task
+import com.example.irondiary.data.model.StudySession
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 data class LocalDataBundle(
     val logs: List<DailyLog>,
-    val tasks: List<Task>
+    val tasks: List<Task>,
+    val sessions: List<StudySession>
 )
 
 data class IntelligenceResponse(
@@ -70,6 +72,14 @@ object IronIntelligenceEngine {
             // Weight History (Specific Dates)
             q.contains("weight on") || q.contains("weight for") -> IntelligenceResponse(getWeightOnDate(q, bundle.logs))
             
+            // Correlation Insights
+            q.contains("link") || q.contains("correlation") || q.contains("compare") || q.contains("affect") ->
+                IntelligenceResponse(getCorrelationInsights(bundle))
+
+            // Study Stats
+            q.contains("study") || q.contains("subject") || q.contains("hours") || q.contains("productive") ->
+                IntelligenceResponse(getStudyStats(q, bundle.sessions))
+
             // Gym Stats
             q.contains("gym") || q.contains("workout") -> IntelligenceResponse(getGymStats(q, bundle.logs))
             
@@ -78,9 +88,61 @@ object IronIntelligenceEngine {
             
             // General Greeting / Help
             q.contains("hi") || q.contains("hello") || q.contains("help") -> 
-                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and workout split (e.g., 'When did I last train back?'). I can even project when you'll reach a goal (e.g., 'When will I reach 75kg?').")
+                IntelligenceResponse("I can answer questions about your weight, gym split, and study habits. Try asking 'How much did I study this week?' or 'Does the gym affect my studying?'.")
             
-            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or even a weight goal prediction!")
+            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight, gym progress, or study sessions!")
+        }
+    }
+
+    private fun getStudyStats(query: String, sessions: List<StudySession>): String {
+        if (sessions.isEmpty()) return "I don't see any study sessions logged yet. Start a focus session in the Study tab to track your progress!"
+
+        val last7Days = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000L)
+        val recentSessions = sessions.filter { it.updatedAt.toDate().time > last7Days }
+        val totalHours = recentSessions.sumOf { it.duration }
+
+        return when {
+            query.contains("subject") -> {
+                val topSubject = sessions.groupBy { it.subject }
+                    .maxByOrNull { it.value.sumOf { s -> s.duration } }?.key
+                "Your most studied subject is '$topSubject'. You've put in some serious work there!"
+            }
+            query.contains("week") || query.contains("recent") -> {
+                "In the last 7 days, you've studied for ${String.format("%.1f", totalHours)} hours across ${recentSessions.size} sessions."
+            }
+            else -> {
+                val totalEver = sessions.sumOf { it.duration }
+                "You've logged a total of ${String.format("%.1f", totalEver)} hours of deep work since you started using Iron Diary. Impressive!"
+            }
+        }
+    }
+
+    private fun getCorrelationInsights(bundle: LocalDataBundle): String {
+        val gymDays = bundle.logs.filter { it.attendedGym }.map { it.date }.toSet()
+        if (gymDays.isEmpty() || bundle.sessions.isEmpty()) {
+            return "I need a bit more data on both your gym sessions and study focus to find correlations. Keep logging for a few more days!"
+        }
+
+        val sessionsOnGymDays = bundle.sessions.filter { 
+            val sessionDate = it.date.toDate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+            gymDays.contains(sessionDate)
+        }
+        
+        val sessionsOnRestDays = bundle.sessions.filter { 
+            val sessionDate = it.date.toDate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+            !gymDays.contains(sessionDate)
+        }
+
+        val avgDurationGym = if (sessionsOnGymDays.isNotEmpty()) sessionsOnGymDays.map { it.duration }.average() else 0.0
+        val avgDurationRest = if (sessionsOnRestDays.isNotEmpty()) sessionsOnRestDays.map { it.duration }.average() else 0.0
+
+        return if (avgDurationGym > avgDurationRest) {
+            val percent = ((avgDurationGym - avgDurationRest) / avgDurationRest * 100).toInt()
+            "Iron Insight: You study $percent% longer on days you hit the gym! Your physical activity seems to be fueling your focus."
+        } else if (avgDurationRest > avgDurationGym) {
+            "Iron Insight: You tend to have longer study sessions on your rest days. It looks like you're using that extra recovery time to dive deep into your books."
+        } else {
+            "Iron Insight: Your study duration is remarkably consistent regardless of whether you hit the gym or not. That's some high-level discipline!"
         }
     }
 
@@ -97,7 +159,7 @@ object IronIntelligenceEngine {
             LocalDate.parse(last.date, dateFormatter)
         ).coerceAtLeast(1)
         
-        val totalDelta = last.weight - first.weight
+        val totalDelta = last.weight!! - first.weight!!
         val dailyDelta = totalDelta / daysBetween
         val weeklyRate = dailyDelta * 7
 
@@ -105,7 +167,7 @@ object IronIntelligenceEngine {
         val targetWeight = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
         
         return if (targetWeight != null) {
-            val currentWeight = last.weight
+            val currentWeight = last.weight!!
             val remaining = targetWeight - currentWeight
             
             if (Math.abs(dailyDelta) < 0.001) {
