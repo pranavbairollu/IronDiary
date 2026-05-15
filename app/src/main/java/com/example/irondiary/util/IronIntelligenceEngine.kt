@@ -36,6 +36,37 @@ object IronIntelligenceEngine {
         "glutes" to listOf("glutes", "legs")
     )
 
+    fun getWelcomeMessage(bundle: LocalDataBundle): String {
+        val validLogs = bundle.logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
+        val gymLogs = bundle.logs.filter { it.attendedGym }
+        val studyHours = bundle.sessions.sumOf { it.duration }
+        
+        val last7Days = LocalDate.now().minusDays(7)
+        val gymCount = gymLogs.count { 
+            try { LocalDate.parse(it.date, dateFormatter).isAfter(last7Days) } catch(e: Exception) { false }
+        }
+
+        return when {
+            validLogs.size >= 3 && gymCount >= 3 -> {
+                "Welcome back! You've hit the gym $gymCount times this week and your weight trend is looking solid. You're in peak momentum—what's the plan for today?"
+            }
+            studyHours > 10 -> {
+                "Hi there! You've logged over 10 hours of study recently. Don't forget that a quick gym session could boost your focus even further!"
+            }
+            validLogs.size >= 2 -> {
+                val first = validLogs.first().weight!!
+                val last = validLogs.last().weight!!
+                val diff = last - first
+                if (diff < 0) {
+                    "Great to see you! You've lost ${String.format("%.1f", -diff)} kg since you started. You're making real progress—ready to keep going?"
+                } else {
+                    "Welcome back! I'm tracking your progress. Ask me anything about your weight trends or gym history to see how you're doing."
+                }
+            }
+            else -> "Hi! I'm your Iron Assistant. Log your weight and workouts to see your intelligence dashboard grow!"
+        }
+    }
+
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 

@@ -126,4 +126,16 @@ class IronIntelligenceEngineTest {
         val response = IronIntelligenceEngine.processQuery("Does the gym affect my studying?", bundle)
         org.junit.Assert.assertEquals("Iron Insight: You study 100% longer on days you hit the gym! Your physical activity seems to be fueling your focus.", response.text)
     }
+
+    @Test
+    fun testWelcomeMessage() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f),
+            DailyLog(date = "2023-01-10", weight = 78.0f)
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        val welcome = IronIntelligenceEngine.getWelcomeMessage(bundle)
+        
+        assertTrue("Welcome should mention weight loss", welcome.contains("lost 2.0 kg"))
+    }
 }

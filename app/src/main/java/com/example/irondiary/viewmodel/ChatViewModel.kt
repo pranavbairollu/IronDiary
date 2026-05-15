@@ -49,6 +49,8 @@ class ChatViewModel(
 
     private var currentDataBundle: LocalDataBundle? = null
 
+    private var isWelcomeSent = false
+
     init {
         val userId = auth.currentUser?.uid
         if (userId != null) {
@@ -61,6 +63,13 @@ class ChatViewModel(
                     LocalDataBundle(weights, tasks, sessions)
                 }.collect { bundle ->
                     currentDataBundle = bundle
+                    
+                    // Proactive Nudge
+                    if (!isWelcomeSent && _messages.value.size <= 1) {
+                        val welcome = IronIntelligenceEngine.getWelcomeMessage(bundle)
+                        _messages.value = listOf(ChatMessage(welcome, false))
+                        isWelcomeSent = true
+                    }
                 }
             }
         }
