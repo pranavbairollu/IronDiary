@@ -5,6 +5,7 @@ import com.example.irondiary.data.model.Task
 import com.example.irondiary.data.model.StudySession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import java.time.LocalDate
 import org.junit.Test
 
@@ -392,5 +393,45 @@ class IronIntelligenceEngineTest {
         val response2 = IronIntelligenceEngine.processQuery("trend", LocalDataBundle(logsWithGain, emptyList(), emptyList()))
         
         assertTrue("Should detect LOSS goal from note and warn on gain", response2.text.contains("disciplined on your cut"))
+    }
+
+    @Test
+    fun testFridaySquatStressTest() {
+        // Stress Test: Log Squats on Monday, check recommendation on Friday
+        val today = LocalDate.now()
+        val monday = today.minusDays(4) // Assume today is Friday, so Monday was 4 days ago
+        
+        val logs = listOf(
+            DailyLog(date = monday.toString(), notes = "Squats 100kg", attendedGym = true)
+        )
+        
+        val recommendation = IronIntelligenceEngine.getNextWorkoutRecommendation(logs)
+        
+        // Should NOT suggest legs because legs were trained 4 days ago and others were NEVER trained
+        assertFalse("Should not suggest legs", recommendation.contains("LEGS"))
+        assertTrue("Should suggest a never-trained muscle like CHEST", recommendation.contains("CHEST") || recommendation.contains("BACK"))
+    }
+
+    @Test
+    fun testSubMuscleDetection() {
+        // Test: Training "triceps" should mark "arms" as trained
+        val logs = listOf(
+            DailyLog(date = LocalDate.now().toString(), notes = "Triceps pushdowns")
+        )
+        
+        val recommendation = IronIntelligenceEngine.getNextWorkoutRecommendation(logs)
+        // Since arms (via triceps) was trained today, it should suggest something else
+        assertFalse("Should not suggest arms", recommendation.contains("ARMS"))
+    }
+
+    @Test
+    fun testTrainingDirectorFalsePositive() {
+        val logs = listOf(
+            DailyLog(date = LocalDate.now().toString(), notes = "I have an absolute headache")
+        )
+        
+        val recommendation = IronIntelligenceEngine.getNextWorkoutRecommendation(logs)
+        // "absolute" should not trigger "abs"
+        assertTrue("Should state no muscles found", recommendation.contains("don't mention specific muscle groups"))
     }
 }

@@ -139,9 +139,14 @@ object IronIntelligenceEngine {
             
             if (date != null) {
                 mainMuscles.forEach { muscle ->
-                    val aliases = (muscleHierarchy.filter { it.value.contains(muscle) }.keys + muscle).toSet()
+                    // Hardening: Use word-boundary regex for muscle and exercise matching
+                    val muscleAliases = (muscleHierarchy.filter { it.value.contains(muscle) }.keys + muscle)
                     val relatedExercises = exerciseToMuscleMap.filter { it.value == muscle }.keys
-                    if (aliases.any { notes.contains(it) } || relatedExercises.any { notes.contains(it) }) {
+                    
+                    val hasMuscleMatch = muscleAliases.any { Regex("\\b$it\\b").containsMatchIn(notes) }
+                    val hasExerciseMatch = relatedExercises.any { notes.contains(it) } // Exercises usually multi-word, contains is safer
+                    
+                    if (hasMuscleMatch || hasExerciseMatch) {
                         muscleLastTrained[muscle] = date
                     }
                 }
