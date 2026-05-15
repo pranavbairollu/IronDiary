@@ -21,7 +21,17 @@ object IronIntelligenceEngine {
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     
     private val muscleGroups = listOf(
-        "back", "chest", "shoulders", "legs", "arms", "abs", "core", "cardio", "glutes", "triceps", "biceps", "forearms", "calves"
+        "back", "chest", "shoulders", "legs", "arms", "abs", "core", "cardio", "glutes", "triceps", "biceps", "forearms", "calves", "quads", "hamstrings"
+    )
+
+    private val muscleHierarchy = mapOf(
+        "triceps" to listOf("triceps", "arms"),
+        "biceps" to listOf("biceps", "arms"),
+        "quads" to listOf("quads", "legs"),
+        "hamstrings" to listOf("hamstrings", "legs"),
+        "calves" to listOf("calves", "legs"),
+        "abs" to listOf("abs", "core"),
+        "glutes" to listOf("glutes", "legs")
     )
 
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
@@ -32,7 +42,8 @@ object IronIntelligenceEngine {
         val isAskingHistory = q.contains("day") || q.contains("when") || q.contains("last") || q.contains("list") || q.contains("train") || q.contains("workout")
         
         if (detectedMuscle != null && isAskingHistory) {
-            return IntelligenceResponse(getWorkoutHistoryByMuscleGroup(detectedMuscle, bundle.logs))
+            val aliases = muscleHierarchy[detectedMuscle] ?: listOf(detectedMuscle)
+            return IntelligenceResponse(getWorkoutHistoryByMuscleGroup(detectedMuscle, aliases, bundle.logs))
         }
 
         return when {
@@ -69,9 +80,10 @@ object IronIntelligenceEngine {
         }
     }
 
-    private fun getWorkoutHistoryByMuscleGroup(muscle: String, logs: List<DailyLog>): String {
+    private fun getWorkoutHistoryByMuscleGroup(muscle: String, aliases: List<String>, logs: List<DailyLog>): String {
         val matchingLogs = logs.filter { log ->
-            log.notes?.lowercase(Locale.getDefault())?.contains(muscle) == true
+            val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
+            aliases.any { notes.contains(it) }
         }.sortedByDescending { it.date }
 
         return if (matchingLogs.isNotEmpty()) {
@@ -80,7 +92,8 @@ object IronIntelligenceEngine {
             val prefix = if (count > 5) "Your last 5 sessions for $muscle were on: " else "You trained $muscle on: "
             "$prefix$dates. (Total: $count sessions found)"
         } else {
-            "I couldn't find any logs where you mentioned training $muscle. Make sure to add it to your daily notes!"
+            val aliasMsg = if (aliases.size > 1) " (I also checked for ${aliases.last()})" else ""
+            "I couldn't find any logs where you mentioned training $muscle$aliasMsg. Make sure to add it to your daily notes!"
         }
     }
 

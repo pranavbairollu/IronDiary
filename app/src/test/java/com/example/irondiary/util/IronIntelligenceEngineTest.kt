@@ -66,4 +66,19 @@ class IronIntelligenceEngineTest {
         assertTrue("Response should contain Jan 01", response.text.contains("Jan 01"))
         assertTrue("Response should mention 2 sessions", response.text.contains("2 sessions"))
     }
+
+    @Test
+    fun testMuscleHierarchyQuery() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Chest and Arms day", attendedGym = true),
+            DailyLog(date = "2023-01-05", notes = "Triceps isolation", attendedGym = true)
+        )
+        val bundle = LocalDataBundle(logs, emptyList())
+        
+        // Querying for triceps should find both "Arms" and "Triceps"
+        val response = IronIntelligenceEngine.processQuery("When did I last do triceps?", bundle)
+        assertTrue("Response should contain Jan 05", response.text.contains("Jan 05"))
+        assertTrue("Response should contain Jan 01", response.text.contains("Jan 01"))
+        assertTrue("Response should mention 2 sessions", response.text.contains("2 sessions"))
+    }
 }
