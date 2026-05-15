@@ -69,9 +69,17 @@ fun WeightGraphScreen() {
         Text(
             text = "Weight Trend",
             style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 24.dp),
+            modifier = Modifier.padding(bottom = 16.dp),
             textAlign = TextAlign.Center
         )
+        
+        val topInsight by chatViewModel.topInsight.collectAsState()
+        topInsight?.let {
+            com.example.irondiary.ui.components.IntelligenceCard(
+                insight = it,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+        }
 
         Card(
             modifier = Modifier

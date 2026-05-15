@@ -45,6 +45,9 @@ class ChatViewModel(
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
+    private val _topInsight = MutableStateFlow<String?>(null)
+    val topInsight: StateFlow<String?> = _topInsight.asStateFlow()
+
     private var speechRecognizer: SpeechRecognizer? = null
 
     private var currentDataBundle: LocalDataBundle? = null
@@ -63,6 +66,9 @@ class ChatViewModel(
                     LocalDataBundle(weights, tasks, sessions)
                 }.collect { bundle ->
                     currentDataBundle = bundle
+                    
+                    // Update Top Insight
+                    _topInsight.value = IronIntelligenceEngine.getTopInsight(bundle)
                     
                     // Proactive Nudge
                     if (!isWelcomeSent && _messages.value.size <= 1) {

@@ -188,4 +188,17 @@ class IronIntelligenceEngineTest {
         assertTrue("Should identify 90kg as PR", response.text.contains("90.0 kg"))
         assertTrue("Should mention the date", response.text.contains("Jan 10, 2023"))
     }
+
+    @Test
+    fun testTopInsightPrioritization() {
+        val today = LocalDate.now()
+        // Case 1: Stale muscles should take priority
+        val logs = listOf(
+            DailyLog(date = today.minusDays(10).toString(), notes = "Chest Day"),
+            DailyLog(date = today.minusDays(1).toString(), notes = "Back Day")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        val insight = IronIntelligenceEngine.getTopInsight(bundle)
+        assertTrue("Should prioritize workout recommendation", insight.contains("record of you training LEGS", ignoreCase = true))
+    }
 }

@@ -217,6 +217,30 @@ object IronIntelligenceEngine {
         }
     }
 
+    fun getTopInsight(bundle: LocalDataBundle): String {
+        val rec = getNextWorkoutRecommendation(bundle.logs)
+        if (rec.contains("haven't trained") || rec.contains("record of you training")) {
+            return rec
+        }
+        
+        val corr = getCorrelationInsights(bundle)
+        if (corr.contains("longer on days you hit the gym")) {
+            return corr
+        }
+        
+        val validLogs = bundle.logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
+        if (validLogs.size >= 2) {
+            val last = validLogs.last().weight!!
+            val first = validLogs.first().weight!!
+            val diff = last - first
+            if (Math.abs(diff) > 2.0) {
+                return "You've ${if (diff < 0) "lost" else "gained"} ${String.format("%.1f", Math.abs(diff))} kg since you started. Incredible work! Keep that momentum going."
+            }
+        }
+        
+        return "Keep logging your sessions and weight to unlock more deep insights from your Iron Coach!"
+    }
+
     private fun getStudyStats(query: String, sessions: List<StudySession>): String {
         if (sessions.isEmpty()) return "I don't see any study sessions logged yet. Start a focus session in the Study tab to track your progress!"
 
