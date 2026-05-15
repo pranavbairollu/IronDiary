@@ -67,6 +67,58 @@ object IronIntelligenceEngine {
         }
     }
 
+    fun getNextWorkoutRecommendation(logs: List<DailyLog>): String {
+        if (logs.isEmpty()) return "I don't have enough history yet to suggest a workout. Start by logging your first session!"
+
+        val muscleLastTrained = mutableMapOf<String, LocalDate>()
+        
+        // We only care about parent muscle groups for high-level split
+        val mainMuscles = listOf("chest", "back", "legs", "shoulders", "arms", "abs")
+        
+        logs.sortedBy { it.date }.forEach { log ->
+            val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
+            val date = try { LocalDate.parse(log.date, dateFormatter) } catch(e: Exception) { null }
+            
+            if (date != null) {
+                mainMuscles.forEach { muscle ->
+                    val aliases = (muscleHierarchy.filter { it.value.contains(muscle) }.keys + muscle).toSet()
+                    if (aliases.any { notes.contains(it) }) {
+                        muscleLastTrained[muscle] = date
+                    }
+                }
+            }
+        }
+        
+        if (muscleLastTrained.isEmpty()) {
+            return "I see your gym attendance, but your notes don't mention specific muscle groups. Try adding 'Chest Day' or 'Legs' to your daily notes so I can track your split!"
+        }
+        
+        // Find the muscle trained longest ago, or never trained
+        val neverTrained = mainMuscles.filter { !muscleLastTrained.containsKey(it) }
+        
+        return if (neverTrained.isNotEmpty()) {
+            val muscle = neverTrained.first()
+            "I don't see any record of you training ${muscle.uppercase()} yet! Why not kick things off with a solid ${muscle.replaceFirstChar { it.uppercase() }} session today?"
+        } else {
+            val oldestEntry = mainMuscles
+                .filter { muscleLastTrained.containsKey(it) }
+                .minByOrNull { muscleLastTrained[it]!! }
+            
+            if (oldestEntry != null) {
+                val lastDate = muscleLastTrained[oldestEntry]!!
+                val daysSince = java.time.temporal.ChronoUnit.DAYS.between(lastDate, LocalDate.now())
+                
+                when {
+                    daysSince >= 7 -> "You haven't trained $oldestEntry in over a week ($daysSince days)! It should be fully recovered. How about a ${oldestEntry.replaceFirstChar { it.uppercase() }} session today?"
+                    daysSince >= 4 -> "It's been $daysSince days since your last $oldestEntry session. This is a great time to hit them again."
+                    else -> "Your muscle groups are looking well-balanced! Your $oldestEntry session was the furthest back ($daysSince days ago). If you're feeling recovered, that's your best bet today."
+                }
+            } else {
+                "Start logging your specific muscle groups in your notes to get personalized workout recommendations!"
+            }
+        }
+    }
+
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 
@@ -112,7 +164,13 @@ object IronIntelligenceEngine {
                 IntelligenceResponse(getStudyStats(q, bundle.sessions))
 
             // Gym Stats
-            q.contains("gym") || q.contains("workout") -> IntelligenceResponse(getGymStats(q, bundle.logs))
+            q.contains("gym") || q.contains("workout") || q.contains("train") -> {
+                if (q.contains("should") || q.contains("suggest") || q.contains("next")) {
+                    IntelligenceResponse(getNextWorkoutRecommendation(bundle.logs))
+                } else {
+                    IntelligenceResponse(getGymStats(q, bundle.logs))
+                }
+            }
             
             // Task Stats
             q.contains("task") || q.contains("todo") -> IntelligenceResponse(getTaskStats(bundle.tasks))

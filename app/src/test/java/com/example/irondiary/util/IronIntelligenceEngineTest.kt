@@ -4,6 +4,7 @@ import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.model.Task
 import com.example.irondiary.data.model.StudySession
 import org.junit.Assert.assertTrue
+import java.time.LocalDate
 import org.junit.Test
 
 class IronIntelligenceEngineTest {
@@ -137,5 +138,22 @@ class IronIntelligenceEngineTest {
         val welcome = IronIntelligenceEngine.getWelcomeMessage(bundle)
         
         assertTrue("Welcome should mention weight loss", welcome.contains("lost 2.0 kg"))
+    }
+
+    @Test
+    fun testWorkoutRecommendation() {
+        val today = LocalDate.now()
+        val logs = listOf(
+            DailyLog(date = today.minusDays(10).toString(), notes = "Chest Day"),
+            DailyLog(date = today.minusDays(8).toString(), notes = "Legs session"),
+            DailyLog(date = today.minusDays(6).toString(), notes = "Back and biceps"),
+            DailyLog(date = today.minusDays(4).toString(), notes = "Abs and core"),
+            DailyLog(date = today.minusDays(2).toString(), notes = "Shoulders and arms")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        val response = IronIntelligenceEngine.processQuery("What should I train next?", bundle)
+        
+        assertTrue("Recommendation should suggest chest", response.text.contains("chest", ignoreCase = true))
+        assertTrue("Recommendation should mention days since", response.text.contains("10 days"))
     }
 }

@@ -110,6 +110,10 @@ fun ChatWindow(
                     label = { Text("Avg Weight", fontSize = 12.sp) }
                 )
                 SuggestionChip(
+                    onClick = { onSendMessage("What should I train today?") }, 
+                    label = { Text("What should I train?", fontSize = 12.sp) }
+                )
+                SuggestionChip(
                     onClick = { onSendMessage("Gym progress this month?") }, 
                     label = { Text("Gym Stats", fontSize = 12.sp) }
                 )
