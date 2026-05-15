@@ -114,11 +114,17 @@ fun WeightGraphScreen() {
                     personalRecords.forEach { (exercise, record) ->
                         item {
                             val (weight, unit, date) = record
+                            val isRecent = try {
+                                val prDate = LocalDate.parse(date)
+                                prDate.isAfter(LocalDate.now().minusDays(7)) || prDate.isEqual(LocalDate.now())
+                            } catch(e: Exception) { false }
+                            
                             com.example.irondiary.ui.components.RecordTrophyCard(
                                 exercise = exercise,
                                 weight = weight,
                                 unit = unit,
-                                date = formatDisplayDate(date)
+                                date = formatDisplayDate(date),
+                                isRecent = isRecent
                             )
                         }
                     }

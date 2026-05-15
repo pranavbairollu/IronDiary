@@ -317,16 +317,19 @@ object IronIntelligenceEngine {
     }
 
     fun getTopInsight(bundle: LocalDataBundle): String {
+        // Priority 1: Urgent Workout Recommendations (Training Director)
         val rec = getNextWorkoutRecommendation(bundle.logs)
-        if (rec.contains("haven't trained") || rec.contains("record of you training")) {
+        if (rec.contains("haven't trained", ignoreCase = true) || rec.contains("record of you training", ignoreCase = true)) {
             return rec
         }
         
+        // Priority 2: Deep Correlations (Brain vs. Gym)
         val corr = getCorrelationInsights(bundle)
-        if (corr.contains("longer on days you hit the gym")) {
+        if (corr.contains("Iron Insight", ignoreCase = true) && (corr.contains("longer", ignoreCase = true) || corr.contains("discipline", ignoreCase = true))) {
             return corr
         }
         
+        // Priority 3: Significant Weight Milestones
         val validLogs = bundle.logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
         if (validLogs.size >= 2) {
             val last = validLogs.last().weight!!
@@ -334,7 +337,7 @@ object IronIntelligenceEngine {
             val diff = last - first
             val goal = detectGoalType(bundle.logs)
             
-            if (Math.abs(diff) > 2.0) {
+            if (Math.abs(diff) > 1.5) { // Lowered threshold slightly for better engagement
                 return when {
                     goal == GoalType.GAIN && diff > 0 -> "You've gained ${String.format("%.1f", diff)} kg! Your bulk is working—keep those calories high and sets heavy! 💪"
                     goal == GoalType.LOSS && diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg! Your cut is looking sharp. Discipline is paying off! 🔥"

@@ -481,4 +481,21 @@ class IronIntelligenceEngineTest {
         val response = IronIntelligenceEngine.processQuery("correlation", LocalDataBundle(logs, emptyList(), sessions))
         assertTrue("Should handle 0 rest study gracefully", response.text.contains("100% longer on days you hit the gym"))
     }
+
+    @Test
+    fun testTopInsightPriorityWaterfall() {
+        // Setup: A state with both an urgent workout rec and a weight milestone
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f, notes = "Squats 100kg"), // Monday: Legs
+            DailyLog(date = "2023-01-15", weight = 82.0f, notes = "Bench 50kg")    // 2 weeks later: Chest + 2kg gain
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        val insight = IronIntelligenceEngine.getTopInsight(bundle)
+        
+        // Priority 1: Workout Rec should win (because it's been > 7 days since legs)
+        assertTrue("Workout recommendation should take priority", insight.contains("haven't trained") || insight.contains("record of you training"))
+        // It should NOT show the weight gain milestone yet
+        assertFalse("Weight milestone should be shadowed by workout rec", insight.contains("gained"))
+    }
 }
