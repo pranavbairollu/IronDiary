@@ -22,6 +22,33 @@ object IronIntelligenceEngine {
 
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     
+    enum class GoalType { LOSS, GAIN, NEUTRAL }
+
+    private fun detectGoalType(logs: List<DailyLog>, query: String? = null): GoalType {
+        val validLogs = logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
+        if (validLogs.isEmpty()) return GoalType.NEUTRAL
+        
+        val lastWeight = validLogs.last().weight!!
+        
+        // If query has a number, assume it's a target weight
+        if (query != null && (query.contains("reach") || query.contains("goal") || query.contains("target"))) {
+            val target = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
+            if (target != null) {
+                return if (target > lastWeight) GoalType.GAIN else GoalType.LOSS
+            }
+        }
+        
+        // Fallback: Check if they are consistently gaining or losing over the last 14 days
+        val recentLogs = validLogs.takeLast(14)
+        if (recentLogs.size >= 3) {
+            val diff = recentLogs.last().weight!! - recentLogs.first().weight!!
+            if (diff > 1.5f) return GoalType.GAIN
+            if (diff < -1.5f) return GoalType.LOSS
+        }
+
+        return GoalType.NEUTRAL
+    }
+
     private val muscleGroups = listOf(
         "back", "chest", "shoulders", "legs", "arms", "abs", "core", "cardio", "glutes", "triceps", "biceps", "forearms", "calves", "quads", "hamstrings"
     )
@@ -233,8 +260,15 @@ object IronIntelligenceEngine {
             val last = validLogs.last().weight!!
             val first = validLogs.first().weight!!
             val diff = last - first
+            val goal = detectGoalType(bundle.logs)
+            
             if (Math.abs(diff) > 2.0) {
-                return "You've ${if (diff < 0) "lost" else "gained"} ${String.format("%.1f", Math.abs(diff))} kg since you started. Incredible work! Keep that momentum going."
+                return when {
+                    goal == GoalType.GAIN && diff > 0 -> "You've gained ${String.format("%.1f", diff)} kg! Your bulk is working—keep those calories high and sets heavy! 💪"
+                    goal == GoalType.LOSS && diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg! Your cut is looking sharp. Discipline is paying off! 🔥"
+                    diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg since you started. Great work! (If you're bulking, try increasing your surplus!)"
+                    else -> "You've gained ${String.format("%.1f", diff)} kg since you started. (If you're cutting, keep an eye on your caloric intake!)"
+                }
             }
         }
         
@@ -429,13 +463,14 @@ object IronIntelligenceEngine {
         val first = validLogs.first()
         val last = validLogs.last()
         val diff = last.weight!! - first.weight!!
+        val goal = detectGoalType(logs)
 
-        return if (diff < 0) {
-            "You've lost ${String.format("%.1f", -diff)} kg since your first entry on ${formatDisplayDate(first.date)}."
-        } else if (diff > 0) {
-            "You've gained ${String.format("%.1f", diff)} kg since your first entry on ${formatDisplayDate(first.date)}."
-        } else {
-            "Your weight has remained stable since your first entry."
+        return when {
+            diff < 0 && goal == GoalType.GAIN -> "Your weight is down ${String.format("%.1f", -diff)} kg. To reach your bulk goal, you might need more fuel!"
+            diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Sharp progress!"
+            diff > 0 && goal == GoalType.LOSS -> "Your weight is up ${String.format("%.1f", diff)} kg. Stay disciplined on your cut!"
+            diff > 0 -> "You've gained ${String.format("%.1f", diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Solid gains!"
+            else -> "Your weight has remained stable since your first entry."
         }
     }
 

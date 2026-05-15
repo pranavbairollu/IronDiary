@@ -201,4 +201,24 @@ class IronIntelligenceEngineTest {
         val insight = IronIntelligenceEngine.getTopInsight(bundle)
         assertTrue("Should prioritize workout recommendation", insight.contains("record of you training LEGS", ignoreCase = true))
     }
+
+    @Test
+    fun testGoalRecognitionAndResponse() {
+        val today = LocalDate.now()
+        // Case: Bulking goal (detected by trend or target query)
+        val logs = listOf(
+            DailyLog(date = today.minusDays(14).toString(), weight = 70.0f),
+            DailyLog(date = today.minusDays(7).toString(), weight = 71.0f),
+            DailyLog(date = today.toString(), weight = 72.0f)
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // 1. Detect Bulk Goal via trend
+        val trend = IronIntelligenceEngine.processQuery("How is my weight trend?", bundle)
+        assertTrue("Should acknowledge gains positively for bulk", trend.text.contains("Solid gains"))
+
+        // 2. Detect Bulk Goal via explicit query
+        val prediction = IronIntelligenceEngine.processQuery("When will I reach 80kg?", bundle)
+        assertTrue("Should recognize target weight higher than current as bulk", prediction.text.contains("reach 80.0 kg"))
+    }
 }
