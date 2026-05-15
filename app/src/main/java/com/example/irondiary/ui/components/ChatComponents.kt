@@ -19,13 +19,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.core.*
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicNone
 import com.example.irondiary.viewmodel.ChatMessage
 
 @Composable
 fun ChatWindow(
     messages: List<ChatMessage>,
     isTyping: Boolean,
+    isListening: Boolean = false,
     onSendMessage: (String) -> Unit,
+    onToggleVoice: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -108,10 +115,46 @@ fun ChatWindow(
                 )
             }
 
+            // Input Area
+            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+            val pulseScale by infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.2f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "scale"
+            )
+            val pulseAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.6f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "alpha"
+            )
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = onToggleVoice,
+                    modifier = Modifier.then(
+                        if (isListening) Modifier.scale(pulseScale).alpha(pulseAlpha) else Modifier
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicNone,
+                        contentDescription = "Voice Input",
+                        tint = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                }
+
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },

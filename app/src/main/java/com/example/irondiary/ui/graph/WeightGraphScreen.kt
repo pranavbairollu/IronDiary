@@ -49,6 +49,15 @@ fun WeightGraphScreen() {
     val weightDataResource by mainViewModel.weightData.collectAsState()
     val chatMessages by chatViewModel.messages.collectAsState()
     val isTyping by chatViewModel.isTyping.collectAsState()
+    val isListening by chatViewModel.isListening.collectAsState()
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            chatViewModel.toggleVoiceInput(context)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -95,7 +104,17 @@ fun WeightGraphScreen() {
         ChatWindow(
             messages = chatMessages,
             isTyping = isTyping,
-            onSendMessage = { chatViewModel.sendMessage(it) }
+            isListening = isListening,
+            onSendMessage = { chatViewModel.sendMessage(it) },
+            onToggleVoice = {
+                val permission = android.Manifest.permission.RECORD_AUDIO
+                val isGranted = androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (isGranted) {
+                    chatViewModel.toggleVoiceInput(context)
+                } else {
+                    permissionLauncher.launch(permission)
+                }
+            }
         )
         
         Spacer(modifier = Modifier.height(16.dp))

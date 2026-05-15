@@ -14,6 +14,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import java.util.Locale
 
 data class ChatMessage(
     val text: String,
@@ -35,6 +41,11 @@ class ChatViewModel(
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
+
+    private val _isListening = MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
+
+    private var speechRecognizer: SpeechRecognizer? = null
 
     private var currentDataBundle: LocalDataBundle? = null
 
@@ -77,6 +88,49 @@ class ChatViewModel(
             )
             _isTyping.value = false
         }
+    }
+
+    fun toggleVoiceInput(context: android.content.Context) {
+        if (_isListening.value) {
+            speechRecognizer?.stopListening()
+            _isListening.value = false
+        } else {
+            if (speechRecognizer == null) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            }
+            
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            }
+            
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) { _isListening.value = true }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() { _isListening.value = false }
+                override fun onError(error: Int) { 
+                    _isListening.value = false 
+                }
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        sendMessage(matches[0])
+                    }
+                    _isListening.value = false
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            
+            speechRecognizer?.startListening(intent)
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        speechRecognizer?.destroy()
     }
 }
 
