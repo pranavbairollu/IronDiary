@@ -165,27 +165,57 @@ object IronIntelligenceEngine {
         }
     }
 
+    fun processVoiceQuery(matches: List<String>, bundle: LocalDataBundle): IntelligenceResponse {
+        // 1. Try to find a high-confidence match in the list of candidates
+        for (match in matches) {
+            val q = match.lowercase(Locale.getDefault()).trim()
+            
+            // Check for specific keywords using word boundaries to avoid false positives (like 'pr' in 'press')
+            val keywords = listOf("pr", "max", "trend", "weight", "study", "gym")
+            val hasGymKeyword = keywords.any { Regex("\\b$it\\b").containsMatchIn(q) }
+            val hasExercise = exerciseToMuscleMap.keys.any { q.contains(it) }
+            val hasMuscle = muscleGroups.any { Regex("\\b$it\\b").containsMatchIn(q) }
+            
+            if (hasGymKeyword || hasExercise || hasMuscle) {
+                return processQuery(q, bundle)
+            }
+        }
+        
+        // 2. Fallback to the first match if no high-confidence gym match found
+        return processQuery(matches[0], bundle)
+    }
+
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 
         // Detect PR Queries
         val prRegex = Regex("""\b(pr|max|best|personal record)\b""", RegexOption.IGNORE_CASE)
         if (prRegex.containsMatchIn(q)) {
-            val targetExercise = exerciseToMuscleMap.keys.find { q.contains(it) }
+            val targetExercise = exerciseToMuscleMap.keys.find { 
+                q.contains(it) || (it.contains(" ") && q.contains(it.split(" ")[0])) // Fuzzy match "bench" to "bench press"
+            }
             if (targetExercise != null) {
                 return IntelligenceResponse(getPersonalRecord(targetExercise, bundle.logs))
+            } else if (q.split(" ").size <= 2) { // Just "PR" or "Show PRs"
+                val allPRs = getAllPersonalRecords(bundle.logs)
+                if (allPRs.isEmpty()) return IntelligenceResponse("I don't see any PRs in your notes yet. Try logging one like 'Bench Press 100kg'!")
+                val top3 = allPRs.entries.sortedByDescending { it.value.first }.take(3)
+                val text = "Your Top 3 PRs are: " + top3.joinToString(", ") { "${it.key}: ${it.value.first} ${it.value.second}" }
+                return IntelligenceResponse(text)
             }
         }
 
         // Detect Exercise Queries
-        val detectedExercise = exerciseToMuscleMap.keys.find { q.contains(it) }
-        if (detectedExercise != null && (q.contains("when") || q.contains("last") || q.contains("history") || q.contains("many"))) {
+        val detectedExercise = exerciseToMuscleMap.keys.find { 
+            q.contains(it) || (it.contains(" ") && q.contains(it.split(" ")[0]) && q.length < 20) 
+        }
+        if (detectedExercise != null && (q.contains("when") || q.contains("last") || q.contains("history") || q.contains("many") || q.contains("how"))) {
             return IntelligenceResponse(getExerciseHistory(detectedExercise, bundle.logs))
         }
 
         // Detect Muscle Group Queries
         val detectedMuscle = muscleGroups.find { q.contains(it) }
-        val isAskingHistory = q.contains("day") || q.contains("when") || q.contains("last") || q.contains("list") || q.contains("train") || q.contains("workout")
+        val isAskingHistory = q.contains("day") || q.contains("when") || q.contains("last") || q.contains("list") || q.contains("train") || q.contains("workout") || q.contains("how")
         
         if (detectedMuscle != null && isAskingHistory) {
             val aliases = muscleHierarchy[detectedMuscle] ?: listOf(detectedMuscle)
@@ -193,6 +223,10 @@ object IronIntelligenceEngine {
         }
 
         return when {
+            // Stats summary nudge
+            q == "stats" || q == "how am i doing" || q == "progress" ->
+                IntelligenceResponse(getTopInsight(bundle))
+
             // Predictions & Goals
             q.contains("reach") || q.contains("goal") || q.contains("prediction") || q.contains("forecast") ->
                 IntelligenceResponse(getWeightPrediction(q, bundle.logs))

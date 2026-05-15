@@ -47,6 +47,7 @@ fun WeightGraphScreen() {
     val chatMessages by chatViewModel.messages.collectAsState()
     val isTyping by chatViewModel.isTyping.collectAsState()
     val isListening by chatViewModel.isListening.collectAsState()
+    val rmsLevel by chatViewModel.rmsLevel.collectAsState()
 
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -157,6 +158,7 @@ fun WeightGraphScreen() {
             messages = chatMessages,
             isTyping = isTyping,
             isListening = isListening,
+            rmsLevel = rmsLevel,
             onSendMessage = { chatViewModel.sendMessage(it) },
             onToggleVoice = {
                 val permission = android.Manifest.permission.RECORD_AUDIO

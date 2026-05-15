@@ -45,6 +45,9 @@ class ChatViewModel(
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
+    private val _rmsLevel = MutableStateFlow(0f)
+    val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
+
     private val _topInsight = MutableStateFlow<String?>(null)
     val topInsight: StateFlow<String?> = _topInsight.asStateFlow()
 
@@ -111,10 +114,30 @@ class ChatViewModel(
         }
     }
 
+    fun sendVoiceMessage(matches: List<String>) {
+        _isTyping.value = true
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(800) // Slightly shorter delay for voice for better responsiveness
+            
+            val response = currentDataBundle?.let {
+                // Pass all matches to the engine for better context-aware routing
+                IronIntelligenceEngine.processVoiceQuery(matches, it)
+            } ?: com.example.irondiary.util.IntelligenceResponse("I'm still loading your data. Please try again in a moment!")
+
+            _messages.value = _messages.value + ChatMessage(
+                text = response.text,
+                isUser = false,
+                graphData = response.graphData
+            )
+            _isTyping.value = false
+        }
+    }
+
     fun toggleVoiceInput(context: android.content.Context) {
         if (_isListening.value) {
             speechRecognizer?.stopListening()
             _isListening.value = false
+            _rmsLevel.value = 0f
         } else {
             if (speechRecognizer == null) {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
@@ -123,23 +146,51 @@ class ChatViewModel(
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                // Hardening: Configure timeouts for gym environments
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5) // Get multiple matches for routing
             }
             
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { _isListening.value = true }
+                override fun onReadyForSpeech(params: Bundle?) { 
+                    _isListening.value = true 
+                    _rmsLevel.value = 0f
+                }
                 override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onRmsChanged(rmsdB: Float) {
+                    // Normalize RMS for UI (usually ranges from -2 to 10+)
+                    _rmsLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                }
                 override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { _isListening.value = false }
+                override fun onEndOfSpeech() { 
+                    _isListening.value = false 
+                    _rmsLevel.value = 0f
+                }
                 override fun onError(error: Int) { 
                     _isListening.value = false 
+                    _rmsLevel.value = 0f
+                    
+                    val errorMessage = when (error) {
+                        SpeechRecognizer.ERROR_NO_MATCH -> "I didn't catch that. Try speaking a bit more clearly!"
+                        SpeechRecognizer.ERROR_AUDIO -> "Audio recording error. Check your microphone!"
+                        SpeechRecognizer.ERROR_NETWORK -> "Network error. Make sure you're connected!"
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't hear anything. Try again when you're ready!"
+                        else -> "Iron Voice is having a moment. Let's try again!"
+                    }
+                    
+                    _messages.value = _messages.value + ChatMessage(errorMessage, false)
                 }
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        sendMessage(matches[0])
+                        // For voice input, we don't show the "user message" bubble immediately 
+                        // if we want to confirm what was heard, but for "Iron Voice" 
+                        // we'll show the best match as the user message and then process.
+                        _messages.value = _messages.value + ChatMessage(matches[0], true)
+                        sendVoiceMessage(matches)
                     }
                     _isListening.value = false
+                    _rmsLevel.value = 0f
                 }
                 override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}

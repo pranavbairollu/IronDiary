@@ -31,6 +31,7 @@ fun ChatWindow(
     messages: List<ChatMessage>,
     isTyping: Boolean,
     isListening: Boolean = false,
+    rmsLevel: Float = 0f,
     onSendMessage: (String) -> Unit,
     onToggleVoice: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -50,7 +51,7 @@ fun ChatWindow(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(400.dp),
+            .height(420.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
@@ -62,12 +63,27 @@ fun ChatWindow(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "🛡️ Iron Assistant",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(bottom = 12.dp, start = 4.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🛡️ Iron Assistant",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(bottom = 12.dp, start = 4.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                if (isListening) {
+                    Text(
+                        text = "Listening...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 12.dp, end = 4.dp)
+                    )
+                }
+            }
 
             LazyColumn(
                 state = lazyListState,
@@ -123,22 +139,16 @@ fun ChatWindow(
             val infiniteTransition = rememberInfiniteTransition(label = "pulse")
             val pulseScale by infiniteTransition.animateFloat(
                 initialValue = 1f,
-                targetValue = 1.2f,
+                targetValue = 1.15f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(800),
+                    animation = tween(1200, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "scale"
             )
-            val pulseAlpha by infiniteTransition.animateFloat(
-                initialValue = 0.6f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(800),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "alpha"
-            )
+            
+            // Collect RMS level from ViewModel (passed via UI state)
+            val dynamicRippleScale = 1f + (rmsLevel * 0.4f) // Scale ripple based on volume
 
             Row(
                 modifier = Modifier
@@ -146,17 +156,56 @@ fun ChatWindow(
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onToggleVoice,
-                    modifier = Modifier.then(
-                        if (isListening) Modifier.scale(pulseScale).alpha(pulseAlpha) else Modifier
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicNone,
-                        contentDescription = "Voice Input",
-                        tint = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                    )
+                Box(contentAlignment = Alignment.Center) {
+                    if (isListening) {
+                        // Multi-layered ripple
+                        repeat(2) { index ->
+                            val rippleScale by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = (2.0f + (index * 0.5f)) * dynamicRippleScale,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000, delayMillis = index * 300),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "ripple"
+                            )
+                            val rippleAlpha by infiniteTransition.animateFloat(
+                                initialValue = 0.4f,
+                                targetValue = 0f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000, delayMillis = index * 300),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "rippleAlpha"
+                            )
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .scale(rippleScale)
+                                    .alpha(rippleAlpha)
+                                    .background(MaterialTheme.colorScheme.error, RoundedCornerShape(50))
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onToggleVoice,
+                        modifier = Modifier
+                            .background(
+                                if (isListening) MaterialTheme.colorScheme.error.copy(alpha = 0.1f) else Color.Transparent,
+                                RoundedCornerShape(50)
+                            )
+                            .then(
+                                if (isListening) Modifier.scale(pulseScale) else Modifier
+                            )
+                    ) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicNone,
+                            contentDescription = "Voice Input",
+                            tint = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
 
                 OutlinedTextField(

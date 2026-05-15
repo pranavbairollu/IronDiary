@@ -236,4 +236,54 @@ class IronIntelligenceEngineTest {
         assertEquals(90.0, records["bench press"]?.first)
         assertEquals(100.0, records["squats"]?.first)
     }
+
+    @Test
+    fun testVoiceQueryMultiMatchRouting() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f),
+            DailyLog(date = "2023-01-02", weight = 80.0f)
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // Multi-match scenario: Top result is noisy/unrelated, second is gym-related
+        val matches = listOf("french press is cool", "what is my weight trend", "bench press")
+        val response = IronIntelligenceEngine.processVoiceQuery(matches, bundle)
+        
+        assertTrue("Should identify weight trend from multi-match", response.text.contains("stable"))
+    }
+
+    @Test
+    fun testFuzzyExerciseMatching() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Bench Press 100kg")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // User just says "Bench" instead of "Bench Press"
+        val response = IronIntelligenceEngine.processQuery("How is my bench PR?", bundle)
+        assertTrue("Should match 'bench' to 'bench press'", response.text.contains("100.0 kg"))
+    }
+
+    @Test
+    fun testNakedPRQuery() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Bench Press 100kg"),
+            DailyLog(date = "2023-01-05", notes = "Squats 150kg")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // User just says "PR?"
+        val response = IronIntelligenceEngine.processQuery("PR?", bundle)
+        assertTrue("Should show top PRs", response.text.contains("squats: 150.0") && response.text.contains("bench press: 100.0"))
+    }
+
+    @Test
+    fun testShortStatusQuery() {
+        val logs = listOf(DailyLog(date = "2023-01-01", weight = 80.0f))
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // User says "How am I doing?"
+        val response = IronIntelligenceEngine.processQuery("how am i doing", bundle)
+        assertTrue("Should trigger insight engine", response.text.contains("Iron Coach") || response.text.contains("insight"))
+    }
 }
