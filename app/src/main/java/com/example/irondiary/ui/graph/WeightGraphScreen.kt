@@ -28,15 +28,31 @@ import com.example.irondiary.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.platform.LocalContext
+import com.example.irondiary.data.repository.IronDiaryRepository
+import com.example.irondiary.ui.components.ChatWindow
+import com.example.irondiary.viewmodel.ChatViewModel
+import com.example.irondiary.viewmodel.ChatViewModelFactory
+
 @Composable
 fun WeightGraphScreen() {
-    val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
+    val context = LocalContext.current
+    val application = context.applicationContext as android.app.Application
+    val repository = remember { IronDiaryRepository(application) }
+    
     val mainViewModel: MainViewModel = viewModel(factory = com.example.irondiary.viewmodel.MainViewModelFactory(application))
+    val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(repository))
+    
     val weightDataResource by mainViewModel.weightData.collectAsState()
+    val chatMessages by chatViewModel.messages.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -72,6 +88,15 @@ fun WeightGraphScreen() {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        ChatWindow(
+            messages = chatMessages,
+            onSendMessage = { chatViewModel.sendMessage(it) }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
