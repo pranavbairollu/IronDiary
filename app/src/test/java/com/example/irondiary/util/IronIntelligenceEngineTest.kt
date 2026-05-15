@@ -352,4 +352,45 @@ class IronIntelligenceEngineTest {
         assertEquals(250.0, records["squats"]?.first)
         assertEquals("lbs", records["squats"]?.second)
     }
+
+    @Test
+    fun testNoteBasedGoalPersistence() {
+        // Stress Test: Persistence of goal via notes
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f, notes = "Starting my bulk today!"),
+            DailyLog(date = "2023-01-10", weight = 82.0f, notes = "Gym session")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        val response = IronIntelligenceEngine.processQuery("How is my weight trend?", bundle)
+        assertTrue("Should use Bulk tone", response.text.contains("Solid gains on your bulk"))
+    }
+
+    @Test
+    fun testCutModeWarning() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f, notes = "Focus: Loss. Shredding for summer."),
+            DailyLog(date = "2023-01-10", weight = 81.0f)
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        val response = IronIntelligenceEngine.processQuery("trend", bundle)
+        assertTrue("Should use Cut warning tone", response.text.contains("Stay disciplined on your cut"))
+    }
+
+    @Test
+    fun testTargetWeightGoalDetection() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80.0f, notes = "Goal weight: 75kg")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // This should detect LOSS mode
+        val response = IronIntelligenceEngine.processQuery("trend", bundle)
+        // If we gain 0.5kg (total 80.5) it should warn
+        val logsWithGain = logs + DailyLog(date = "2023-01-10", weight = 81.0f)
+        val response2 = IronIntelligenceEngine.processQuery("trend", LocalDataBundle(logsWithGain, emptyList(), emptyList()))
+        
+        assertTrue("Should detect LOSS goal from note and warn on gain", response2.text.contains("disciplined on your cut"))
+    }
 }

@@ -30,7 +30,7 @@ object IronIntelligenceEngine {
         
         val lastWeight = validLogs.last().weight!!
         
-        // If query has a number, assume it's a target weight
+        // 1. Direct Query Check (Immediate intent)
         if (query != null && (query.contains("reach") || query.contains("goal") || query.contains("target"))) {
             val target = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
             if (target != null) {
@@ -38,7 +38,20 @@ object IronIntelligenceEngine {
             }
         }
         
-        // Fallback: Check if they are consistently gaining or losing over the last 14 days
+        // 2. Note-based Persistence (Scans history for goal declarations)
+        logs.sortedByDescending { it.date }.take(30).forEach { log ->
+            val n = log.notes?.lowercase(Locale.getDefault()) ?: ""
+            if (n.contains("bulk") || n.contains("bulking") || n.contains("focus: gain")) return GoalType.GAIN
+            if (n.contains("cut") || n.contains("cutting") || n.contains("shredding") || n.contains("focus: loss")) return GoalType.LOSS
+            
+            // Check for "Goal: 90kg" in notes
+            if (n.contains("goal") || n.contains("target")) {
+                val target = n.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
+                if (target != null) return if (target > lastWeight) GoalType.GAIN else GoalType.LOSS
+            }
+        }
+
+        // 3. Trend-based Inference (Fallback)
         val recentLogs = validLogs.takeLast(14)
         if (recentLogs.size >= 3) {
             val diff = recentLogs.last().weight!! - recentLogs.first().weight!!
@@ -548,11 +561,15 @@ object IronIntelligenceEngine {
         val goal = detectGoalType(logs)
 
         return when {
-            diff < 0 && goal == GoalType.GAIN -> "Your weight is down ${String.format("%.1f", -diff)} kg. To reach your bulk goal, you might need more fuel!"
-            diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Sharp progress!"
-            diff > 0 && goal == GoalType.LOSS -> "Your weight is up ${String.format("%.1f", diff)} kg. Stay disciplined on your cut!"
-            diff > 0 -> "You've gained ${String.format("%.1f", diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Solid gains!"
-            else -> "Your weight has remained stable since your first entry."
+            diff < 0 && goal == GoalType.GAIN -> "Your weight is down ${String.format("%.1f", -diff)} kg. To reach your bulk goal, you might need more fuel! Keep those calories high. 🍖"
+            diff < 0 && goal == GoalType.LOSS -> "You've lost ${String.format("%.1f", -diff)} kg since ${formatDisplayDate(first.date)}. Sharp progress on your cut! Stay disciplined. 🔥"
+            diff < 0 -> "You've lost ${String.format("%.1f", -diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Great work!"
+            
+            diff > 0 && goal == GoalType.LOSS -> "Your weight is up ${String.format("%.1f", diff)} kg. Stay disciplined on your cut! Watch those hidden calories. 🥗"
+            diff > 0 && goal == GoalType.GAIN -> "You've gained ${String.format("%.1f", diff)} kg since ${formatDisplayDate(first.date)}. Solid gains on your bulk! Keep lifting heavy. 💪"
+            diff > 0 -> "You've gained ${String.format("%.1f", diff)} kg since your first entry on ${formatDisplayDate(first.date)}. Solid progress!"
+            
+            else -> "Your weight has remained stable since your first entry. Consistency is key!"
         }
     }
 
