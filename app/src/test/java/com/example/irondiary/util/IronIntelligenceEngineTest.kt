@@ -286,4 +286,46 @@ class IronIntelligenceEngineTest {
         val response = IronIntelligenceEngine.processQuery("how am i doing", bundle)
         assertTrue("Should trigger insight engine", response.text.contains("Iron Coach") || response.text.contains("insight"))
     }
+
+    @Test
+    fun testComplexMultiIntentQuery() {
+        val today = LocalDate.now()
+        val logs = listOf(
+            DailyLog(date = today.minusDays(10).toString(), notes = "Bench Press 100kg"),
+            DailyLog(date = today.minusDays(5).toString(), notes = "Chest Press 80kg")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // Query: "How many days ago did I hit my chest max?"
+        // Should find Bench Press 100kg (since it's higher than 80kg) and calculate 10 days ago.
+        val response = IronIntelligenceEngine.processQuery("How many days ago did I hit my chest max?", bundle)
+        assertTrue("Should identify chest max", response.text.contains("chest max", ignoreCase = true))
+        assertTrue("Should mention bench press", response.text.contains("bench press", ignoreCase = true))
+        assertTrue("Should calculate 10 days ago", response.text.contains("10 days ago"))
+    }
+
+    @Test
+    fun testFalsePositivePrevention() {
+        val logs = listOf(DailyLog(date = "2023-01-01", weight = 80.0f))
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // 1. "Preach" should NOT match "reach" (weight goal)
+        val response1 = IronIntelligenceEngine.processQuery("I need to preach more", bundle)
+        assertTrue("Should not match weight goal", response1.text.contains("not sure"))
+
+        // 2. "Cluster" should NOT match "lost" (weight loss)
+        val response2 = IronIntelligenceEngine.processQuery("This is a cluster", bundle)
+        assertTrue("Should not match weight loss", response2.text.contains("not sure"))
+    }
+
+    @Test
+    fun testSmartFallback() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Squats 100kg")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        val response = IronIntelligenceEngine.processQuery("gibberish", bundle)
+        assertTrue("Should mention squats in suggestion", response.text.contains("squats", ignoreCase = true))
+    }
 }

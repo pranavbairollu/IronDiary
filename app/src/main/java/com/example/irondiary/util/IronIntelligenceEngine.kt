@@ -185,18 +185,49 @@ object IronIntelligenceEngine {
         return processQuery(matches[0], bundle)
     }
 
+    private fun match(q: String, vararg keywords: String): Boolean {
+        return keywords.any { Regex("\\b$it\\b").containsMatchIn(q) }
+    }
+
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 
-        // Detect PR Queries
-        val prRegex = Regex("""\b(pr|max|best|personal record)\b""", RegexOption.IGNORE_CASE)
-        if (prRegex.containsMatchIn(q)) {
-            val targetExercise = exerciseToMuscleMap.keys.find { 
-                q.contains(it) || (it.contains(" ") && q.contains(it.split(" ")[0])) // Fuzzy match "bench" to "bench press"
-            }
-            if (targetExercise != null) {
-                return IntelligenceResponse(getPersonalRecord(targetExercise, bundle.logs))
-            } else if (q.split(" ").size <= 2) { // Just "PR" or "Show PRs"
+        // 1. Detect Multi-Intents
+        val isAskingPR = match(q, "pr", "max", "best", "record", "highest weight")
+        val isAskingHistory = match(q, "when", "last", "history", "many", "how", "list", "train", "workout")
+        val isAskingTrend = match(q, "trend", "loss", "lost", "gain", "gained", "prediction", "forecast")
+        
+        // 2. Resolve Subject (Muscle or Exercise)
+        val detectedMuscle = muscleGroups.find { match(q, it) }
+        
+        // Fuzzy match for exercises: only if no muscle group matched or it's an exact exercise match
+        val detectedExercise = exerciseToMuscleMap.keys.find { q.contains(it) } ?: run {
+            if (detectedMuscle == null) {
+                exerciseToMuscleMap.keys.find { it.contains(" ") && match(q, it.split(" ")[0]) }
+            } else null
+        }
+
+        // 3. Handle PR + Muscle/Exercise (The "Chest Max" Stress Test)
+        if (isAskingPR) {
+            if (detectedExercise != null) {
+                return IntelligenceResponse(getPersonalRecord(detectedExercise, bundle.logs))
+            } else if (detectedMuscle != null) {
+                // Find top PR across all exercises for this muscle
+                val relatedExercises = exerciseToMuscleMap.filter { it.value == detectedMuscle }.keys
+                val allPRs = getAllPersonalRecords(bundle.logs).filter { relatedExercises.contains(it.key) }
+                
+                return if (allPRs.isNotEmpty()) {
+                    val topPR = allPRs.maxByOrNull { it.value.first }!!
+                    val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(
+                        LocalDate.parse(topPR.value.third, dateFormatter), 
+                        LocalDate.now()
+                    )
+                    val daysText = if (daysAgo == 0L) "today" else "$daysAgo days ago"
+                    IntelligenceResponse("Your $detectedMuscle max is on ${topPR.key}: ${topPR.value.first} ${topPR.value.second}, achieved $daysText. 💪")
+                } else {
+                    IntelligenceResponse("I couldn't find any recorded PRs for $detectedMuscle exercises. Try logging something like 'Bench Press 100kg'!")
+                }
+            } else if (q.split(" ").size <= 3) {
                 val allPRs = getAllPersonalRecords(bundle.logs)
                 if (allPRs.isEmpty()) return IntelligenceResponse("I don't see any PRs in your notes yet. Try logging one like 'Bench Press 100kg'!")
                 val top3 = allPRs.entries.sortedByDescending { it.value.first }.take(3)
@@ -205,39 +236,29 @@ object IronIntelligenceEngine {
             }
         }
 
-        // Detect Exercise Queries
-        val detectedExercise = exerciseToMuscleMap.keys.find { 
-            q.contains(it) || (it.contains(" ") && q.contains(it.split(" ")[0]) && q.length < 20) 
-        }
-        if (detectedExercise != null && (q.contains("when") || q.contains("last") || q.contains("history") || q.contains("many") || q.contains("how"))) {
-            return IntelligenceResponse(getExerciseHistory(detectedExercise, bundle.logs))
-        }
-
-        // Detect Muscle Group Queries
-        val detectedMuscle = muscleGroups.find { q.contains(it) }
-        val isAskingHistory = q.contains("day") || q.contains("when") || q.contains("last") || q.contains("list") || q.contains("train") || q.contains("workout") || q.contains("how")
-        
-        if (detectedMuscle != null && isAskingHistory) {
-            val aliases = muscleHierarchy[detectedMuscle] ?: listOf(detectedMuscle)
-            return IntelligenceResponse(getWorkoutHistoryByMuscleGroup(detectedMuscle, aliases, bundle.logs))
+        // 4. Handle History + Muscle/Exercise
+        if (isAskingHistory) {
+            if (detectedExercise != null) {
+                return IntelligenceResponse(getExerciseHistory(detectedExercise, bundle.logs))
+            } else if (detectedMuscle != null) {
+                val aliases = muscleHierarchy[detectedMuscle] ?: listOf(detectedMuscle)
+                return IntelligenceResponse(getWorkoutHistoryByMuscleGroup(detectedMuscle, aliases, bundle.logs))
+            }
         }
 
+        // 5. Handle Trends & Stats
         return when {
-            // Stats summary nudge
-            q == "stats" || q == "how am i doing" || q == "progress" ->
+            match(q, "stats", "progress", "doing") ->
                 IntelligenceResponse(getTopInsight(bundle))
 
-            // Predictions & Goals
-            q.contains("reach") || q.contains("goal") || q.contains("prediction") || q.contains("forecast") ->
+            match(q, "reach", "goal", "prediction", "forecast") ->
                 IntelligenceResponse(getWeightPrediction(q, bundle.logs))
 
-            // Weight Stats
-            q.contains("highest weight") || q.contains("max weight") -> IntelligenceResponse(getHighestWeight(bundle.logs))
-            q.contains("lowest weight") || q.contains("min weight") -> IntelligenceResponse(getLowestWeight(bundle.logs))
-            q.contains("average weight") || q.contains("avg weight") -> IntelligenceResponse(getAverageWeight(bundle.logs))
+            match(q, "highest weight", "max weight") -> IntelligenceResponse(getHighestWeight(bundle.logs))
+            match(q, "lowest weight", "min weight") -> IntelligenceResponse(getLowestWeight(bundle.logs))
+            match(q, "average weight", "avg weight") -> IntelligenceResponse(getAverageWeight(bundle.logs))
             
-            // Weight Trends
-            q.contains("weight loss") || q.contains("lost") || q.contains("gain") || q.contains("trend") -> {
+            isAskingTrend -> {
                 val text = getWeightTrend(bundle.logs)
                 val graphData = bundle.logs
                     .filter { it.weight != null && it.weight > 0 }
@@ -247,34 +268,33 @@ object IronIntelligenceEngine {
                 IntelligenceResponse(text, if (graphData.size >= 2) graphData else null)
             }
             
-            // Weight History (Specific Dates)
-            q.contains("weight on") || q.contains("weight for") -> IntelligenceResponse(getWeightOnDate(q, bundle.logs))
+            match(q, "weight on", "weight for") -> IntelligenceResponse(getWeightOnDate(q, bundle.logs))
             
-            // Correlation Insights
-            q.contains("link") || q.contains("correlation") || q.contains("compare") || q.contains("affect") ->
+            match(q, "link", "correlation", "compare", "affect") ->
                 IntelligenceResponse(getCorrelationInsights(bundle))
 
-            // Study Stats
-            q.contains("study") || q.contains("subject") || q.contains("hours") || q.contains("productive") ->
+            match(q, "study", "subject", "hours", "productive") ->
                 IntelligenceResponse(getStudyStats(q, bundle.sessions))
 
-            // Gym Stats
-            q.contains("gym") || q.contains("workout") || q.contains("train") -> {
-                if (q.contains("should") || q.contains("suggest") || q.contains("next")) {
+            match(q, "gym", "workout", "train") -> {
+                if (match(q, "should", "suggest", "next")) {
                     IntelligenceResponse(getNextWorkoutRecommendation(bundle.logs))
                 } else {
                     IntelligenceResponse(getGymStats(q, bundle.logs))
                 }
             }
             
-            // Task Stats
-            q.contains("task") || q.contains("todo") -> IntelligenceResponse(getTaskStats(bundle.tasks))
+            match(q, "task", "tasks", "todo", "todos") -> IntelligenceResponse(getTaskStats(bundle.tasks))
             
-            // General Greeting / Help
-            q.contains("hi") || q.contains("hello") || q.contains("help") -> 
+            match(q, "hi", "hello", "help") -> 
                 IntelligenceResponse("I can answer questions about your weight, gym split, and study habits. Try asking 'How much did I study this week?' or 'Does the gym affect my studying?'.")
             
-            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight, gym progress, or study sessions!")
+            else -> {
+                // Smart Fallback Suggestor
+                val recentExercise = bundle.logs.sortedByDescending { it.date }.firstOrNull { !it.notes.isNullOrBlank() }?.notes?.split(" ")?.firstOrNull()
+                val suggestText = if (recentExercise != null) " I see you've been working on $recentExercise lately. Want to see your progress there?" else ""
+                IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym PRs, or study sessions!$suggestText")
+            }
         }
     }
 
