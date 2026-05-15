@@ -156,4 +156,22 @@ class IronIntelligenceEngineTest {
         assertTrue("Recommendation should suggest chest", response.text.contains("chest", ignoreCase = true))
         assertTrue("Recommendation should mention days since", response.text.contains("10 days"))
     }
+
+    @Test
+    fun testExerciseMapping() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Did some heavy bench press and rows"),
+            DailyLog(date = "2023-01-05", notes = "Squats and lunges")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        // 1. Direct exercise query
+        val response1 = IronIntelligenceEngine.processQuery("When did I last do bench press?", bundle)
+        assertTrue("Should find bench press history", response1.text.contains("Jan 01, 2023"))
+        assertTrue("Should mention chest", response1.text.contains("chest"))
+
+        // 2. Muscle group query picking up exercises
+        val response2 = IronIntelligenceEngine.processQuery("When did I train legs?", bundle)
+        assertTrue("Should find legs history via squats", response2.text.contains("Jan 05, 2023"))
+    }
 }

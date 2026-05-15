@@ -36,6 +36,24 @@ object IronIntelligenceEngine {
         "glutes" to listOf("glutes", "legs")
     )
 
+    private val exerciseToMuscleMap = mapOf(
+        "bench press" to "chest",
+        "chest press" to "chest",
+        "flyes" to "chest",
+        "pushups" to "chest",
+        "deadlift" to "back",
+        "pullups" to "back",
+        "rows" to "back",
+        "lat pulldown" to "back",
+        "squats" to "legs",
+        "leg press" to "legs",
+        "lunges" to "legs",
+        "curls" to "arms",
+        "skull crushers" to "arms",
+        "shoulder press" to "shoulders",
+        "lateral raises" to "shoulders"
+    )
+
     fun getWelcomeMessage(bundle: LocalDataBundle): String {
         val validLogs = bundle.logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
         val gymLogs = bundle.logs.filter { it.attendedGym }
@@ -82,7 +100,8 @@ object IronIntelligenceEngine {
             if (date != null) {
                 mainMuscles.forEach { muscle ->
                     val aliases = (muscleHierarchy.filter { it.value.contains(muscle) }.keys + muscle).toSet()
-                    if (aliases.any { notes.contains(it) }) {
+                    val relatedExercises = exerciseToMuscleMap.filter { it.value == muscle }.keys
+                    if (aliases.any { notes.contains(it) } || relatedExercises.any { notes.contains(it) }) {
                         muscleLastTrained[muscle] = date
                     }
                 }
@@ -121,6 +140,12 @@ object IronIntelligenceEngine {
 
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
+
+        // Detect Exercise Queries
+        val detectedExercise = exerciseToMuscleMap.keys.find { q.contains(it) }
+        if (detectedExercise != null && (q.contains("when") || q.contains("last") || q.contains("history") || q.contains("many"))) {
+            return IntelligenceResponse(getExerciseHistory(detectedExercise, bundle.logs))
+        }
 
         // Detect Muscle Group Queries
         val detectedMuscle = muscleGroups.find { q.contains(it) }
@@ -278,9 +303,12 @@ object IronIntelligenceEngine {
     }
 
     private fun getWorkoutHistoryByMuscleGroup(muscle: String, aliases: List<String>, logs: List<DailyLog>): String {
+        val relatedExercises = exerciseToMuscleMap.filter { it.value == muscle }.keys
+        val allAliases = (aliases + relatedExercises).toSet()
+        
         val matchingLogs = logs.filter { log ->
             val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
-            aliases.any { notes.contains(it) }
+            allAliases.any { notes.contains(it) }
         }.sortedByDescending { it.date }
 
         return if (matchingLogs.isNotEmpty()) {
@@ -291,6 +319,22 @@ object IronIntelligenceEngine {
         } else {
             val aliasMsg = if (aliases.size > 1) " (I also checked for ${aliases.last()})" else ""
             "I couldn't find any logs where you mentioned training $muscle$aliasMsg. Make sure to add it to your daily notes!"
+        }
+    }
+
+    private fun getExerciseHistory(exercise: String, logs: List<DailyLog>): String {
+        val matchingLogs = logs.filter { log ->
+            val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
+            notes.contains(exercise)
+        }.sortedByDescending { it.date }
+
+        return if (matchingLogs.isNotEmpty()) {
+            val dates = matchingLogs.take(3).joinToString(", ") { formatDisplayDate(it.date) }
+            val count = matchingLogs.size
+            val muscle = exerciseToMuscleMap[exercise]
+            "You last performed $exercise on: $dates. (Total: $count times). Since it targets your $muscle, I've factored this into your split recommendations!"
+        } else {
+            "I couldn't find any logs where you specifically mentioned '$exercise'. Try adding it to your notes!"
         }
     }
 
