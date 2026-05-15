@@ -1,5 +1,8 @@
 package com.example.irondiary.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,15 +24,19 @@ import com.example.irondiary.viewmodel.ChatMessage
 @Composable
 fun ChatWindow(
     messages: List<ChatMessage>,
+    isTyping: Boolean,
     onSendMessage: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            lazyListState.animateScrollToItem(messages.size - 1)
+    LaunchedEffect(messages.size, isTyping) {
+        if (messages.isNotEmpty() || isTyping) {
+            val lastIndex = if (isTyping) messages.size else messages.size - 1
+            if (lastIndex >= 0) {
+                lazyListState.animateScrollToItem(lastIndex)
+            }
         }
     }
 
@@ -65,6 +72,12 @@ fun ChatWindow(
                 items(messages) { message ->
                     ChatBubble(message)
                 }
+                
+                if (isTyping) {
+                    item {
+                        TypingIndicator()
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -73,16 +86,21 @@ fun ChatWindow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                SuggestionChip(
+                    onClick = { onSendMessage("Show me my weight trend") }, 
+                    label = { Text("Visual Trend", fontSize = 12.sp) }
+                )
                 SuggestionChip(
                     onClick = { onSendMessage("What is my average weight?") }, 
                     label = { Text("Avg Weight", fontSize = 12.sp) }
                 )
                 SuggestionChip(
-                    onClick = { onSendMessage("Gym stats this month?") }, 
-                    label = { Text("Gym Progress", fontSize = 12.sp) }
+                    onClick = { onSendMessage("Gym progress this month?") }, 
+                    label = { Text("Gym Stats", fontSize = 12.sp) }
                 )
             }
 
@@ -160,12 +178,43 @@ fun ChatBubble(message: ChatMessage) {
             shape = shape,
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
-            Text(
-                text = message.text,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text(
+                    text = message.text,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+                
+                if (message.graphData != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    MiniSparkline(
+                        data = message.graphData,
+                        lineColor = contentColor,
+                        fillColor = contentColor.copy(alpha = 0.2f)
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun TypingIndicator() {
+    Row(
+        modifier = Modifier
+            .padding(vertical = 4.dp, horizontal = 12.dp)
+            .background(
+                MaterialTheme.colorScheme.secondaryContainer,
+                RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "🛡️ Assistant is analyzing...",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(start = 4.dp)
+        )
     }
 }

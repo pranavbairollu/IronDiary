@@ -11,36 +11,49 @@ data class LocalDataBundle(
     val tasks: List<Task>
 )
 
+data class IntelligenceResponse(
+    val text: String,
+    val graphData: List<Float>? = null
+)
+
 object IronIntelligenceEngine {
 
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
-    fun processQuery(query: String, bundle: LocalDataBundle): String {
+    fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 
         return when {
             // Weight Stats
-            q.contains("highest weight") || q.contains("max weight") -> getHighestWeight(bundle.logs)
-            q.contains("lowest weight") || q.contains("min weight") -> getLowestWeight(bundle.logs)
-            q.contains("average weight") || q.contains("avg weight") -> getAverageWeight(bundle.logs)
+            q.contains("highest weight") || q.contains("max weight") -> IntelligenceResponse(getHighestWeight(bundle.logs))
+            q.contains("lowest weight") || q.contains("min weight") -> IntelligenceResponse(getLowestWeight(bundle.logs))
+            q.contains("average weight") || q.contains("avg weight") -> IntelligenceResponse(getAverageWeight(bundle.logs))
             
             // Weight Trends
-            q.contains("weight loss") || q.contains("lost") || q.contains("gain") -> getWeightTrend(bundle.logs)
+            q.contains("weight loss") || q.contains("lost") || q.contains("gain") || q.contains("trend") -> {
+                val text = getWeightTrend(bundle.logs)
+                val graphData = bundle.logs
+                    .filter { it.weight != null && it.weight > 0 }
+                    .sortedBy { it.date }
+                    .takeLast(7)
+                    .map { it.weight!! }
+                IntelligenceResponse(text, if (graphData.size >= 2) graphData else null)
+            }
             
             // Weight History (Specific Dates)
-            q.contains("weight on") || q.contains("weight for") -> getWeightOnDate(q, bundle.logs)
+            q.contains("weight on") || q.contains("weight for") -> IntelligenceResponse(getWeightOnDate(q, bundle.logs))
             
             // Gym Stats
-            q.contains("gym") || q.contains("workout") -> getGymStats(q, bundle.logs)
+            q.contains("gym") || q.contains("workout") -> IntelligenceResponse(getGymStats(q, bundle.logs))
             
             // Task Stats
-            q.contains("task") || q.contains("todo") -> getTaskStats(bundle.tasks)
+            q.contains("task") || q.contains("todo") -> IntelligenceResponse(getTaskStats(bundle.tasks))
             
             // General Greeting / Help
             q.contains("hi") || q.contains("hello") || q.contains("help") -> 
-                "I can answer questions about your weight trends, gym attendance, and pending tasks. Try asking 'What's my average weight?' or 'Gym stats this month'."
+                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and pending tasks. Try asking 'What's my average weight?' or 'Show me my weight trend'.")
             
-            else -> "I'm not sure about that yet. Try asking about your weight trends, gym attendance, or tasks!"
+            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or tasks!")
         }
     }
 

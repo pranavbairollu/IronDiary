@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 data class ChatMessage(
     val text: String,
     val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val graphData: List<Float>? = null
 )
 
 class ChatViewModel(
@@ -31,6 +32,9 @@ class ChatViewModel(
         ChatMessage("Hi! I'm your Iron Assistant. Ask me anything about your weight or gym progress!", false)
     ))
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+
+    private val _isTyping = MutableStateFlow(false)
+    val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
     private var currentDataBundle: LocalDataBundle? = null
 
@@ -55,16 +59,22 @@ class ChatViewModel(
 
         val userMessage = ChatMessage(text, true)
         _messages.value = _messages.value + userMessage
+        _isTyping.value = true
 
         viewModelScope.launch {
-            // Add a small artificial delay for "premium" feel
-            kotlinx.coroutines.delay(500)
+            // Add a small artificial delay for "premium" feel and to show typing indicator
+            kotlinx.coroutines.delay(1200)
             
             val response = currentDataBundle?.let {
                 IronIntelligenceEngine.processQuery(text, it)
-            } ?: "I'm still loading your data. Please try again in a moment!"
+            } ?: com.example.irondiary.util.IntelligenceResponse("I'm still loading your data. Please try again in a moment!")
 
-            _messages.value = _messages.value + ChatMessage(response, false)
+            _messages.value = _messages.value + ChatMessage(
+                text = response.text,
+                isUser = false,
+                graphData = response.graphData
+            )
+            _isTyping.value = false
         }
     }
 }

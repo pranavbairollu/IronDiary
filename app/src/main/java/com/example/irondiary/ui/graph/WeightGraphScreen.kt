@@ -48,6 +48,7 @@ fun WeightGraphScreen() {
     
     val weightDataResource by mainViewModel.weightData.collectAsState()
     val chatMessages by chatViewModel.messages.collectAsState()
+    val isTyping by chatViewModel.isTyping.collectAsState()
 
     Column(
         modifier = Modifier
@@ -93,6 +94,7 @@ fun WeightGraphScreen() {
 
         ChatWindow(
             messages = chatMessages,
+            isTyping = isTyping,
             onSendMessage = { chatViewModel.sendMessage(it) }
         )
         
