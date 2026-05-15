@@ -47,6 +47,10 @@ object IronIntelligenceEngine {
         }
 
         return when {
+            // Predictions & Goals
+            q.contains("reach") || q.contains("goal") || q.contains("prediction") || q.contains("forecast") ->
+                IntelligenceResponse(getWeightPrediction(q, bundle.logs))
+
             // Weight Stats
             q.contains("highest weight") || q.contains("max weight") -> IntelligenceResponse(getHighestWeight(bundle.logs))
             q.contains("lowest weight") || q.contains("min weight") -> IntelligenceResponse(getLowestWeight(bundle.logs))
@@ -74,9 +78,51 @@ object IronIntelligenceEngine {
             
             // General Greeting / Help
             q.contains("hi") || q.contains("hello") || q.contains("help") -> 
-                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and workout split (e.g., 'When did I last train back?').")
+                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and workout split (e.g., 'When did I last train back?'). I can even project when you'll reach a goal (e.g., 'When will I reach 75kg?').")
             
-            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or specific muscle groups you've trained!")
+            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or even a weight goal prediction!")
+        }
+    }
+
+    private fun getWeightPrediction(query: String, logs: List<DailyLog>): String {
+        val validLogs = logs.filter { it.weight != null && it.weight > 0 }.sortedBy { it.date }
+        if (validLogs.size < 3) return "I need at least 3 weight entries over time to calculate your velocity and give you a prediction."
+
+        val recentLogs = validLogs.takeLast(14)
+        val first = recentLogs.first()
+        val last = recentLogs.last()
+        
+        val daysBetween = java.time.temporal.ChronoUnit.DAYS.between(
+            LocalDate.parse(first.date, dateFormatter),
+            LocalDate.parse(last.date, dateFormatter)
+        ).coerceAtLeast(1)
+        
+        val totalDelta = last.weight - first.weight
+        val dailyDelta = totalDelta / daysBetween
+        val weeklyRate = dailyDelta * 7
+
+        // Extract a number from the query as the target weight
+        val targetWeight = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
+        
+        return if (targetWeight != null) {
+            val currentWeight = last.weight
+            val remaining = targetWeight - currentWeight
+            
+            if (Math.abs(dailyDelta) < 0.001) {
+                return "Your weight has been very stable lately. At this rate, it's hard to predict when you'll reach $targetWeight kg!"
+            }
+
+            if ((remaining > 0 && dailyDelta > 0) || (remaining < 0 && dailyDelta < 0)) {
+                val daysToGoal = Math.round((remaining / dailyDelta).toDouble())
+                val goalDate = LocalDate.now().plusDays(daysToGoal)
+                "At your current rate of ${String.format("%.1f", weeklyRate)} kg/week, you'll reach $targetWeight kg in about $daysToGoal days (${goalDate.format(DateTimeFormatter.ofPattern("MMM dd"))})."
+            } else if (Math.abs(remaining) < 0.1f) {
+                "You're already at your goal! Current weight: $currentWeight kg."
+            } else {
+                "Based on your recent trend (${String.format("%.1f", weeklyRate)} kg/week), you are currently moving ${if (dailyDelta > 0) "up" else "down"}, which is away from your goal of $targetWeight kg."
+            }
+        } else {
+            "You are currently ${if (weeklyRate < 0) "losing" else "gaining"} about ${String.format("%.1f", Math.abs(weeklyRate))} kg per week. Try asking 'When will I reach 75kg?' for a specific projection!"
         }
     }
 

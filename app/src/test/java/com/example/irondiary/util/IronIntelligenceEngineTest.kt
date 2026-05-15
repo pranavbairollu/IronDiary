@@ -81,4 +81,19 @@ class IronIntelligenceEngineTest {
         assertTrue("Response should contain Jan 01", response.text.contains("Jan 01"))
         assertTrue("Response should mention 2 sessions", response.text.contains("2 sessions"))
     }
+
+    @Test
+    fun testWeightPredictionQuery() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", weight = 80f),
+            DailyLog(date = "2023-01-08", weight = 79f), // 1kg loss in 7 days
+            DailyLog(date = "2023-01-15", weight = 78f)  // another 1kg loss
+        )
+        val bundle = LocalDataBundle(logs, emptyList())
+        
+        // Target 76kg (should take 2 more weeks)
+        val response = IronIntelligenceEngine.processQuery("When will I reach 76kg?", bundle)
+        assertTrue("Response should mention -1.0 kg/week", response.text.contains("-1.0 kg/week"))
+        assertTrue("Response should mention about 14 days", response.text.contains("14 days"))
+    }
 }
