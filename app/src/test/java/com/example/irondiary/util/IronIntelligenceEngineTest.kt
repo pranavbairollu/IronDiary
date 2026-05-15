@@ -8,6 +8,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import java.time.LocalDate
 import org.junit.Test
+import com.google.firebase.Timestamp
+import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class IronIntelligenceEngineTest {
 
@@ -127,7 +131,8 @@ class IronIntelligenceEngineTest {
         val bundle = LocalDataBundle(logs, emptyList(), sessions)
         
         val response = IronIntelligenceEngine.processQuery("Does the gym affect my studying?", bundle)
-        org.junit.Assert.assertEquals("Iron Insight: You study 100% longer on days you hit the gym! Your physical activity seems to be fueling your focus.", response.text)
+        assertTrue("Should contain lead percentage", response.text.contains("100% longer on days you hit the gym"))
+        assertTrue("Should contain the fueling focus message", response.text.contains("Your physical activity seems to be fueling your focus"))
     }
 
     @Test
@@ -433,5 +438,47 @@ class IronIntelligenceEngineTest {
         val recommendation = IronIntelligenceEngine.getNextWorkoutRecommendation(logs)
         // "absolute" should not trigger "abs"
         assertTrue("Should state no muscles found", recommendation.contains("don't mention specific muscle groups"))
+    }
+
+    @Test
+    fun testCorrelationInversionStressTest() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date1Str = "2023-01-01"
+        val date2Str = "2023-01-02"
+        val date1 = Timestamp(sdf.parse(date1Str)!!)
+        val date2 = Timestamp(sdf.parse(date2Str)!!)
+
+        // Case 1: More study on Rest Days
+        val logs1 = listOf(DailyLog(date = date1Str, attendedGym = true)) // Gym Day
+        val sessions1 = listOf(
+            StudySession(date = date1, duration = 1.0), // Gym day study
+            StudySession(date = date2, duration = 10.0) // Rest day study
+        )
+        val response1 = IronIntelligenceEngine.processQuery("link", LocalDataBundle(logs1, emptyList(), sessions1))
+        assertTrue("Should identify rest day lead", response1.text.contains("longer on rest days"))
+        assertTrue("Should show correct percentage (900%)", response1.text.contains("900%"))
+
+        // Case 2: More study on Gym Days (Inversion)
+        val sessions2 = listOf(
+            StudySession(date = date1, duration = 10.0), // Gym day study
+            StudySession(date = date2, duration = 1.0)  // Rest day study
+        )
+        val response2 = IronIntelligenceEngine.processQuery("correlation", LocalDataBundle(logs1, emptyList(), sessions2))
+        assertTrue("Should identify gym day lead", response2.text.contains("longer on days you hit the gym"))
+        assertTrue("Should show correct percentage (900%)", response2.text.contains("900%"))
+    }
+
+    @Test
+    fun testCorrelationDivisionByZeroSafe() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date1Str = "2023-01-01"
+        val date1 = Timestamp(sdf.parse(date1Str)!!)
+
+        val logs = listOf(DailyLog(date = date1Str, attendedGym = true))
+        val sessions = listOf(StudySession(date = date1, duration = 5.0)) // ONLY gym day study
+        
+        // This used to divide by zero for rest day average (0.0)
+        val response = IronIntelligenceEngine.processQuery("correlation", LocalDataBundle(logs, emptyList(), sessions))
+        assertTrue("Should handle 0 rest study gracefully", response.text.contains("100% longer on days you hit the gym"))
     }
 }

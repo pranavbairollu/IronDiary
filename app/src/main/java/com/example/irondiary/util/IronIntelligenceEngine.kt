@@ -404,25 +404,38 @@ object IronIntelligenceEngine {
         }
 
         val sessionsOnGymDays = bundle.sessions.filter { 
-            val sessionDate = it.date.toDate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+            val sessionDate = try { 
+                it.date.toDate().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+            } catch (e: Exception) { "" }
             gymDays.contains(sessionDate)
         }
         
         val sessionsOnRestDays = bundle.sessions.filter { 
-            val sessionDate = it.date.toDate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
-            !gymDays.contains(sessionDate)
+            val sessionDate = try {
+                it.date.toDate().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+            } catch (e: Exception) { "" }
+            sessionDate.isNotEmpty() && !gymDays.contains(sessionDate)
         }
 
         val avgDurationGym = if (sessionsOnGymDays.isNotEmpty()) sessionsOnGymDays.map { it.duration }.average() else 0.0
         val avgDurationRest = if (sessionsOnRestDays.isNotEmpty()) sessionsOnRestDays.map { it.duration }.average() else 0.0
 
-        return if (avgDurationGym > avgDurationRest) {
-            val percent = ((avgDurationGym - avgDurationRest) / avgDurationRest * 100).toInt()
-            "Iron Insight: You study $percent% longer on days you hit the gym! Your physical activity seems to be fueling your focus."
-        } else if (avgDurationRest > avgDurationGym) {
-            "Iron Insight: You tend to have longer study sessions on your rest days. It looks like you're using that extra recovery time to dive deep into your books."
-        } else {
-            "Iron Insight: Your study duration is remarkably consistent regardless of whether you hit the gym or not. That's some high-level discipline!"
+        val diff = avgDurationGym - avgDurationRest
+        val absDiffPercent = if (avgDurationRest > 0) {
+            (Math.abs(diff) / avgDurationRest * 100).toInt()
+        } else if (avgDurationGym > 0) 100 else 0
+
+        return when {
+            diff > 0.05 -> { // Significant lead on gym days
+                "Iron Insight: You study $absDiffPercent% longer on days you hit the gym! Your physical activity seems to be fueling your focus. 🧠💪"
+            }
+            diff < -0.05 -> { // Significant lead on rest days
+                val restLeadPercent = if (avgDurationGym > 0) (Math.abs(diff) / avgDurationGym * 100).toInt() else 100
+                "Iron Insight: You study $restLeadPercent% longer on rest days. You're using that recovery time to dive deep into your books! 📚🧘"
+            }
+            else -> {
+                "Iron Insight: Your study duration is remarkably consistent regardless of the gym. That's some high-level discipline! ⚖️"
+            }
         }
     }
 
