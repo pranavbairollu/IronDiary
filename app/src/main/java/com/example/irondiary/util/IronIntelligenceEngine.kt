@@ -19,9 +19,21 @@ data class IntelligenceResponse(
 object IronIntelligenceEngine {
 
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+    
+    private val muscleGroups = listOf(
+        "back", "chest", "shoulders", "legs", "arms", "abs", "core", "cardio", "glutes", "triceps", "biceps", "forearms", "calves"
+    )
 
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
+
+        // Detect Muscle Group Queries
+        val detectedMuscle = muscleGroups.find { q.contains(it) }
+        val isAskingHistory = q.contains("day") || q.contains("when") || q.contains("last") || q.contains("list") || q.contains("train") || q.contains("workout")
+        
+        if (detectedMuscle != null && isAskingHistory) {
+            return IntelligenceResponse(getWorkoutHistoryByMuscleGroup(detectedMuscle, bundle.logs))
+        }
 
         return when {
             // Weight Stats
@@ -51,9 +63,24 @@ object IronIntelligenceEngine {
             
             // General Greeting / Help
             q.contains("hi") || q.contains("hello") || q.contains("help") -> 
-                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and pending tasks. Try asking 'What's my average weight?' or 'Show me my weight trend'.")
+                IntelligenceResponse("I can answer questions about your weight trends, gym attendance, and workout split (e.g., 'When did I last train back?').")
             
-            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or tasks!")
+            else -> IntelligenceResponse("I'm not sure about that yet. Try asking about your weight trends, gym attendance, or specific muscle groups you've trained!")
+        }
+    }
+
+    private fun getWorkoutHistoryByMuscleGroup(muscle: String, logs: List<DailyLog>): String {
+        val matchingLogs = logs.filter { log ->
+            log.notes?.lowercase(Locale.getDefault())?.contains(muscle) == true
+        }.sortedByDescending { it.date }
+
+        return if (matchingLogs.isNotEmpty()) {
+            val dates = matchingLogs.take(5).joinToString(", ") { formatDisplayDate(it.date) }
+            val count = matchingLogs.size
+            val prefix = if (count > 5) "Your last 5 sessions for $muscle were on: " else "You trained $muscle on: "
+            "$prefix$dates. (Total: $count sessions found)"
+        } else {
+            "I couldn't find any logs where you mentioned training $muscle. Make sure to add it to your daily notes!"
         }
     }
 
