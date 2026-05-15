@@ -174,4 +174,18 @@ class IronIntelligenceEngineTest {
         val response2 = IronIntelligenceEngine.processQuery("When did I train legs?", bundle)
         assertTrue("Should find legs history via squats", response2.text.contains("Jan 05, 2023"))
     }
+
+    @Test
+    fun testPersonalRecordTracking() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Bench Press 80kg x 5"),
+            DailyLog(date = "2023-01-10", notes = "Bench Press 90kg x 3"),
+            DailyLog(date = "2023-01-15", notes = "Bench Press 85kg x 8")
+        )
+        val bundle = LocalDataBundle(logs, emptyList(), emptyList())
+        
+        val response = IronIntelligenceEngine.processQuery("What is my bench press PR?", bundle)
+        assertTrue("Should identify 90kg as PR", response.text.contains("90.0 kg"))
+        assertTrue("Should mention the date", response.text.contains("Jan 10, 2023"))
+    }
 }

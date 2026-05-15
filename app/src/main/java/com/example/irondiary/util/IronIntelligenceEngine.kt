@@ -141,6 +141,15 @@ object IronIntelligenceEngine {
     fun processQuery(query: String, bundle: LocalDataBundle): IntelligenceResponse {
         val q = query.lowercase(Locale.getDefault()).trim()
 
+        // Detect PR Queries
+        val prRegex = Regex("""\b(pr|max|best|personal record)\b""", RegexOption.IGNORE_CASE)
+        if (prRegex.containsMatchIn(q)) {
+            val targetExercise = exerciseToMuscleMap.keys.find { q.contains(it) }
+            if (targetExercise != null) {
+                return IntelligenceResponse(getPersonalRecord(targetExercise, bundle.logs))
+            }
+        }
+
         // Detect Exercise Queries
         val detectedExercise = exerciseToMuscleMap.keys.find { q.contains(it) }
         if (detectedExercise != null && (q.contains("when") || q.contains("last") || q.contains("history") || q.contains("many"))) {
@@ -335,6 +344,29 @@ object IronIntelligenceEngine {
             "You last performed $exercise on: $dates. (Total: $count times). Since it targets your $muscle, I've factored this into your split recommendations!"
         } else {
             "I couldn't find any logs where you specifically mentioned '$exercise'. Try adding it to your notes!"
+        }
+    }
+
+    private fun getPersonalRecord(exercise: String, logs: List<DailyLog>): String {
+        val weightRegex = Regex("""(\d+(?:\.\d+)?)\s*(kg|lbs)""", RegexOption.IGNORE_CASE)
+        
+        val records = logs.mapNotNull { log ->
+            val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
+            if (notes.contains(exercise)) {
+                val match = weightRegex.find(notes)
+                if (match != null) {
+                    val weightValue = match.groupValues[1].toDouble()
+                    val unit = match.groupValues[2].lowercase()
+                    Triple(weightValue, unit, log.date)
+                } else null
+            } else null
+        }.sortedByDescending { it.first }
+
+        return if (records.isNotEmpty()) {
+            val (weight, unit, date) = records.first()
+            "Your Personal Record for $exercise is $weight $unit, achieved on ${formatDisplayDate(date)}. Boom! 💥"
+        } else {
+            "I couldn't find any recorded weights for $exercise in your notes. Try logging your sets like '$exercise 100kg'!"
         }
     }
 
