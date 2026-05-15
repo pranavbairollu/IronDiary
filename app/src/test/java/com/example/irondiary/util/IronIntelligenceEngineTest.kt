@@ -328,4 +328,28 @@ class IronIntelligenceEngineTest {
         val response = IronIntelligenceEngine.processQuery("gibberish", bundle)
         assertTrue("Should mention squats in suggestion", response.text.contains("squats", ignoreCase = true))
     }
+
+    @Test
+    fun testMultiSetPRExtraction() {
+        // Stress Test: Multiple weights in one note
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Bench Press: 100kg, 110kg, 105kg")
+        )
+        val records = IronIntelligenceEngine.getAllPersonalRecords(logs)
+        
+        assertEquals(110.0, records["bench press"]?.first)
+    }
+
+    @Test
+    fun testMixedUnitComparison() {
+        // Stress Test: Comparing kg and lbs
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Squats 100kg"), // 100kg
+            DailyLog(date = "2023-01-02", notes = "Squats 250lbs") // ~113.4kg (Should Win)
+        )
+        val records = IronIntelligenceEngine.getAllPersonalRecords(logs)
+        
+        assertEquals(250.0, records["squats"]?.first)
+        assertEquals("lbs", records["squats"]?.second)
+    }
 }

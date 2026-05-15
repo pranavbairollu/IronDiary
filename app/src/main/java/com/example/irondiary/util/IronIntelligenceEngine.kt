@@ -334,21 +334,23 @@ object IronIntelligenceEngine {
         val allRecords = mutableMapOf<String, Triple<Double, String, String>>()
 
         exerciseToMuscleMap.keys.forEach { exercise ->
-            val records = logs.mapNotNull { log ->
+            val records = logs.flatMap { log ->
                 val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
                 if (notes.contains(exercise)) {
-                    val match = weightRegex.find(notes)
-                    if (match != null) {
+                    // Hardening: Find ALL matches in the note, not just the first one
+                    weightRegex.findAll(notes).map { match ->
                         val weightValue = match.groupValues[1].toDouble()
                         val unit = match.groupValues[2].lowercase()
-                        Triple(weightValue, unit, log.date)
-                    } else null
-                } else null
-            }.sortedByDescending { it.first }
+                        // Normalize for comparison but keep original for display
+                        val normalizedKg = if (unit == "lbs") weightValue * 0.453592 else weightValue
+                        Triple(weightValue, unit, log.date) to normalizedKg
+                    }.toList()
+                } else emptyList()
+            }.sortedByDescending { it.second } // Sort by normalized weight
 
             if (records.isNotEmpty()) {
-                val (weight, unit, date) = records.first()
-                allRecords[exercise] = Triple(weight, unit, date)
+                val (recordData, _) = records.first()
+                allRecords[exercise] = recordData
             }
         }
         return allRecords
@@ -487,20 +489,21 @@ object IronIntelligenceEngine {
     private fun getPersonalRecord(exercise: String, logs: List<DailyLog>): String {
         val weightRegex = Regex("""(\d+(?:\.\d+)?)\s*(kg|lbs)""", RegexOption.IGNORE_CASE)
         
-        val records = logs.mapNotNull { log ->
+        val records = logs.flatMap { log ->
             val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
             if (notes.contains(exercise)) {
-                val match = weightRegex.find(notes)
-                if (match != null) {
+                weightRegex.findAll(notes).map { match ->
                     val weightValue = match.groupValues[1].toDouble()
                     val unit = match.groupValues[2].lowercase()
-                    Triple(weightValue, unit, log.date)
-                } else null
-            } else null
-        }.sortedByDescending { it.first }
+                    val normalizedKg = if (unit == "lbs") weightValue * 0.453592 else weightValue
+                    Triple(weightValue, unit, log.date) to normalizedKg
+                }.toList()
+            } else emptyList()
+        }.sortedByDescending { it.second }
 
         return if (records.isNotEmpty()) {
-            val (weight, unit, date) = records.first()
+            val (recordData, _) = records.first()
+            val (weight, unit, date) = recordData
             "Your Personal Record for $exercise is $weight $unit, achieved on ${formatDisplayDate(date)}. Boom! 💥"
         } else {
             "I couldn't find any recorded weights for $exercise in your notes. Try logging your sets like '$exercise 100kg'!"
