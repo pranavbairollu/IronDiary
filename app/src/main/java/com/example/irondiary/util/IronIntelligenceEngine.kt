@@ -275,6 +275,31 @@ object IronIntelligenceEngine {
         return "Keep logging your sessions and weight to unlock more deep insights from your Iron Coach!"
     }
 
+    fun getAllPersonalRecords(logs: List<DailyLog>): Map<String, Triple<Double, String, String>> {
+        val weightRegex = Regex("""(\d+(?:\.\d+)?)\s*(kg|lbs)""", RegexOption.IGNORE_CASE)
+        val allRecords = mutableMapOf<String, Triple<Double, String, String>>()
+
+        exerciseToMuscleMap.keys.forEach { exercise ->
+            val records = logs.mapNotNull { log ->
+                val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
+                if (notes.contains(exercise)) {
+                    val match = weightRegex.find(notes)
+                    if (match != null) {
+                        val weightValue = match.groupValues[1].toDouble()
+                        val unit = match.groupValues[2].lowercase()
+                        Triple(weightValue, unit, log.date)
+                    } else null
+                } else null
+            }.sortedByDescending { it.first }
+
+            if (records.isNotEmpty()) {
+                val (weight, unit, date) = records.first()
+                allRecords[exercise] = Triple(weight, unit, date)
+            }
+        }
+        return allRecords
+    }
+
     private fun getStudyStats(query: String, sessions: List<StudySession>): String {
         if (sessions.isEmpty()) return "I don't see any study sessions logged yet. Start a focus session in the Study tab to track your progress!"
 

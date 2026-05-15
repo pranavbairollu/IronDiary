@@ -3,6 +3,7 @@ package com.example.irondiary.util
 import com.example.irondiary.data.DailyLog
 import com.example.irondiary.data.model.Task
 import com.example.irondiary.data.model.StudySession
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import java.time.LocalDate
 import org.junit.Test
@@ -220,5 +221,19 @@ class IronIntelligenceEngineTest {
         // 2. Detect Bulk Goal via explicit query
         val prediction = IronIntelligenceEngine.processQuery("When will I reach 80kg?", bundle)
         assertTrue("Should recognize target weight higher than current as bulk", prediction.text.contains("reach 80.0 kg"))
+    }
+
+    @Test
+    fun testHallOfFameExtraction() {
+        val logs = listOf(
+            DailyLog(date = "2023-01-01", notes = "Bench Press 80kg"),
+            DailyLog(date = "2023-01-10", notes = "Bench Press 90kg"),
+            DailyLog(date = "2023-01-15", notes = "Squats 100kg")
+        )
+        val records = IronIntelligenceEngine.getAllPersonalRecords(logs)
+        
+        assertEquals(2, records.size)
+        assertEquals(90.0, records["bench press"]?.first)
+        assertEquals(100.0, records["squats"]?.first)
     }
 }

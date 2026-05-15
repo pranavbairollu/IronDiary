@@ -1,17 +1,11 @@
 package com.example.irondiary.ui.graph
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,6 +13,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -79,6 +76,53 @@ fun WeightGraphScreen() {
                 insight = it,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
+        }
+
+        val personalRecords by chatViewModel.personalRecords.collectAsState()
+        if (personalRecords.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EmojiEvents,
+                        contentDescription = null,
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = " HALL OF FAME",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFFFFD700),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    personalRecords.forEach { (exercise, record) ->
+                        item {
+                            val (weight, unit, date) = record
+                            com.example.irondiary.ui.components.RecordTrophyCard(
+                                exercise = exercise,
+                                weight = weight,
+                                unit = unit,
+                                date = formatDisplayDate(date)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         Card(
@@ -200,5 +244,14 @@ fun WeightGraph(weightData: List<DailyLog>) {
             fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
             minYValue = 0.0
         )
+    }
+}
+
+private fun formatDisplayDate(dateStr: String): String {
+    return try {
+        val date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
+        date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
+    } catch (e: Exception) {
+        dateStr
     }
 }
