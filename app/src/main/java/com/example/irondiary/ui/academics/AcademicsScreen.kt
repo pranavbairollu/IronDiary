@@ -51,7 +51,7 @@ fun AcademicsScreen(mainViewModel: MainViewModel) {
                         contentDescription = "Academics Icon",
                         modifier = Modifier.size(32.dp)
                     )
-                    Text("Academics", style = MaterialTheme.typography.headlineLarge)
+                    Text("Academics", style = MaterialTheme.typography.headlineMedium)
                 }
                 IconButton(onClick = { authViewModel.signOut() }) {
                     Icon(
