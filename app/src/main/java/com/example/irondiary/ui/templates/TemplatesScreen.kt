@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -138,30 +139,38 @@ fun TemplatesScreen() {
                 )
             }
 
-            items(categorizedTemplates.entries.toList(), key = { it.key }) { (category, templateList) ->
-                Text(
-                    text = category,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp)
-                )
-                
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                    ),
-                    shape = RoundedCornerShape(24.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp, 
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+            categorizedTemplates.forEach { (category, templateList) ->
+                item(key = category) {
+                    Text(
+                        text = category,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp)
                     )
-                ) {
-                    Column {
-                        templateList.forEachIndexed { index, template ->
+                }
+
+                itemsIndexed(templateList, key = { _, t -> "${category}_${t.title}" }) { index, template ->
+                    val isFirst = index == 0
+                    val isLast = index == templateList.size - 1
+                    
+                    val shape = when {
+                        isFirst && isLast -> RoundedCornerShape(24.dp)
+                        isFirst -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                        isLast -> RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                        else -> androidx.compose.ui.graphics.RectangleShape
+                    }
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = shape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, 
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                        )
+                    ) {
+                        Column {
                             TemplateItemRow(
                                 template = template,
                                 onAdd = { mainViewModel.addTemplateToToday(template) },
@@ -171,7 +180,7 @@ fun TemplatesScreen() {
                                     }
                                 }
                             )
-                            if (index < templateList.size - 1) {
+                            if (!isLast) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 56.dp),
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
