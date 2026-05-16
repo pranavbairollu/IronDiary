@@ -106,9 +106,14 @@ class MainViewModel(
         TaskTemplate("Mind", "Be grateful for what you have", "🙏"),
         TaskTemplate("Mind", "Pray", "🤲"),
         TaskTemplate("Mind", "Practice smiling and be happy", "😊"),
+        TaskTemplate("Mind", "Write in journal", "📓"),
+        TaskTemplate("Mind", "Digital detox for 1 hour", "📵"),
         TaskTemplate("Quit", "Eat less sugar", "🍬"),
         TaskTemplate("Quit", "Less time on your phone", "📱"),
-        TaskTemplate("Quit", "Play less game", "🎮")
+        TaskTemplate("Quit", "Play less game", "🎮"),
+        TaskTemplate("Quit", "Stop procrastinating", "⏳"),
+        TaskTemplate("Quit", "No caffeine after 4 PM", "☕"),
+        TaskTemplate("Quit", "No junk food today", "🍔")
     )
 
     private val _categorizedTemplates = MutableStateFlow<Map<String, List<TaskTemplate>>>(emptyMap())

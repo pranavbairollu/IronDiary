@@ -148,9 +148,17 @@ fun TemplatesScreen() {
                 )
                 
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, 
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                    )
                 ) {
                     Column {
                         templateList.forEachIndexed { index, template ->
@@ -166,7 +174,7 @@ fun TemplatesScreen() {
                             if (index < templateList.size - 1) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 56.dp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
                                 )
                             }
                         }
