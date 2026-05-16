@@ -111,7 +111,8 @@ fun WeightGraphScreen() {
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    personalRecords.forEach { (exercise, record) ->
+                    val sortedPRs = personalRecords.entries.sortedByDescending { it.value.third }
+                    sortedPRs.forEach { (exercise, record) ->
                         item {
                             val (weight, unit, date) = record
                             val isRecent = try {
@@ -248,9 +249,7 @@ fun WeightGraph(weightData: List<DailyLog>) {
                 val fullDate = if (index != -1) tooltipLabels[index] else label
                 "${String.format("%.1f", value)} kgs on $fullDate" 
             },
-            lineColor = MaterialTheme.colorScheme.tertiary,
-            fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
-            minYValue = 0.0
+            fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
         )
     }
 }

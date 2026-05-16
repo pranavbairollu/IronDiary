@@ -107,11 +107,13 @@ fun RecordTrophyCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text(
-                    text = exercise.replaceFirstChar { it.uppercase() },
+                    text = exercise.split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } },
                     style = MaterialTheme.typography.labelLarge,
                     color = Color.White.copy(alpha = 0.6f),
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1
+                    maxLines = 2,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 14.sp
                 )
                 
                 Spacer(modifier = Modifier.height(4.dp))
