@@ -57,8 +57,14 @@ class SyncWorker(
             Log.i("SyncWorker", "Full sync completed successfully for user $userId")
             Result.success()
         } else {
-            Log.w("SyncWorker", "Partial sync failure (Tasks:$tasksSuccess, Study:$studySuccess, Logs:$logsSuccess). Retrying...")
-            Result.retry()
+            val retryCount = runAttemptCount
+            if (retryCount >= 3) {
+                Log.e("SyncWorker", "Max retries reached ($retryCount). Abandoning current sync run.")
+                Result.failure()
+            } else {
+                Log.w("SyncWorker", "Partial sync failure (Tasks:$tasksSuccess, Study:$studySuccess, Logs:$logsSuccess). Retry #$retryCount...")
+                Result.retry()
+            }
         }
     }
 

@@ -208,6 +208,16 @@ class IronDiaryRepository(val context: android.content.Context) {
             syncRequest
         )
     }
+    
+    /**
+     * Checks if there is any local data across all domains that is not yet SYNCED.
+     */
+    suspend fun hasUnsyncedData(userId: String): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val tasks = taskDao.getUnsyncedTasks(userId).isNotEmpty()
+        val sessions = studySessionDao.getUnsyncedSessions(userId).isNotEmpty()
+        val logs = dailyLogDao.getUnsyncedLogs(userId).isNotEmpty()
+        tasks || sessions || logs
+    }
 
     /**
      * Completely wipes the local Room database and SharedPreferences.

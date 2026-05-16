@@ -81,6 +81,16 @@ object PdfExportUtility {
                 // Draw Title
                 canvas.drawText("IronDiary Calendar Data", margin, currentY + 18f, titlePaint)
                 currentY += 40f
+                
+                // Draw Summary
+                val totalWorkouts = logs.count { it.attendedGym }
+                val weights = logs.mapNotNull { it.weight }
+                val weightSummary = if (weights.isNotEmpty()) {
+                    "Weight Range: ${String.format("%.1f", weights.min())}kg - ${String.format("%.1f", weights.max())}kg"
+                } else "No weight data logged"
+                
+                canvas.drawText("Total Workouts: $totalWorkouts | $weightSummary", margin, currentY, paint)
+                currentY += 30f
 
                 // Draw Table Header
                 drawHeader(canvas, currentY)
@@ -139,7 +149,7 @@ object PdfExportUtility {
 
                 document.finishPage(page)
 
-                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmssSSS", Locale.getDefault()).format(Date())
                 val fileName = "IronDiary_Export_$timeStamp.pdf"
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
