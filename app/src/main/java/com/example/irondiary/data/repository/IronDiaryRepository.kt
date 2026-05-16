@@ -189,6 +189,16 @@ class IronDiaryRepository(val context: android.content.Context) {
         }
     }
 
+    /**
+     * Retrieves all daily logs (including those without weight) as a list.
+     * Essential for the AI Assistant to track workout history across all sessions.
+     */
+    fun getAllLogsList(userId: String): Flow<List<DailyLog>> {
+        return dailyLogDao.getAllLogs(userId).map { entities ->
+            entities.map { it.toDomainModel() }
+        }
+    }
+
 
     /**
      * Triggers the background [SyncWorker] to process pending local changes.

@@ -65,7 +65,7 @@ class ChatViewModel(
         if (userId != null) {
             viewModelScope.launch {
                 combine(
-                    repository.getWeightData(userId),
+                    repository.getAllLogsList(userId),
                     repository.getTasks(userId),
                     repository.getStudySessions(userId)
                 ) { weights, tasks, sessions ->
