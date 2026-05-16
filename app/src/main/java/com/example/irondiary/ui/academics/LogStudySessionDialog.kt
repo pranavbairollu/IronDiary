@@ -32,7 +32,7 @@ fun LogStudySessionDialog(
     val isDurationInvalid = remember(duration) { 
         if (duration.isEmpty()) false 
         else {
-            val d = duration.toFloatOrNull()
+            val d = duration.replace(',', '.').toFloatOrNull()
             d == null || d.isNaN() || d.isInfinite() || d <= 0f || d > 24f
         }
     }
@@ -47,7 +47,8 @@ fun LogStudySessionDialog(
                     value = subject,
                     onValueChange = { if (it.length <= 100) subject = it },
                     label = { Text("Subject") },
-                    supportingText = { Text("${subject.length}/100") }
+                    supportingText = { Text("${subject.length}/100") },
+                    enabled = !isLoading
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -56,6 +57,7 @@ fun LogStudySessionDialog(
                     label = { Text("Duration (hours)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = isDurationInvalid,
+                    enabled = !isLoading,
                     supportingText = { if (isDurationInvalid) Text("Must be between 0 and 24") }
                 )
             }
@@ -63,7 +65,7 @@ fun LogStudySessionDialog(
         confirmButton = {
             Button(
                 onClick = { 
-                    duration.toFloatOrNull()?.let {
+                    duration.replace(',', '.').toFloatOrNull()?.let {
                         if (!it.isNaN() && !it.isInfinite()) {
                             onConfirm(subject.trim(), it)
                         }

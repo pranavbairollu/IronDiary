@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import java.util.Calendar
+import com.example.irondiary.worker.RescheduleWorker
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -16,6 +17,14 @@ class BootReceiver : BroadcastReceiver() {
             action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             
             // NotificationHelper.scheduleDailyReminder(context) // Removed global daily reminders
+            
+            val workRequest = androidx.work.OneTimeWorkRequestBuilder<RescheduleWorker>()
+                .setConstraints(androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.NOT_REQUIRED)
+                    .build())
+                .build()
+            
+            androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
         }
     }
 }

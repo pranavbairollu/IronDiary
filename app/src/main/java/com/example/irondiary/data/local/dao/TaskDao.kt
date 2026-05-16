@@ -42,4 +42,11 @@ interface TaskDao : BaseDao<TaskEntity> {
      */
     @Query("DELETE FROM tasks WHERE userId = :userId")
     suspend fun deleteAllForUser(userId: String)
+
+    /**
+     * Retrieves all pending tasks across all users that have an active reminder set.
+     * Used by RescheduleWorker to restore alarms after reboot.
+     */
+    @Query("SELECT * FROM tasks WHERE completed = 0 AND reminderTime IS NOT NULL AND syncState != 'DELETED'")
+    suspend fun getPendingTasksWithReminders(): List<TaskEntity>
 }
