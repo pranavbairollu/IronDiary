@@ -56,7 +56,7 @@ fun SimpleLineGraph(
     dataPoints: List<Double>,
     labels: List<String>,
     modifier: Modifier = Modifier,
-    tooltipFormatter: (value: Double, label: String) -> String = { value, label ->
+    tooltipFormatter: (value: Double, label: String, index: Int) -> String = { value, label, _ ->
         "${String.format("%.1f", value)} on $label"
     },
     state: SimpleLineGraphState = rememberSimpleLineGraphState(
@@ -96,6 +96,7 @@ fun SimpleLineGraph(
 
     if (dataPoints.isEmpty()) return
 
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     val animationProgress = remember { Animatable(0f) }
     val selectionAnimation = remember { Animatable(0f) }
 
@@ -131,22 +132,46 @@ fun SimpleLineGraph(
 
     Canvas(
         modifier = modifier
-            .padding(graphPadding)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { state.onDoubleTap() },
                     onTap = { 
                         if (animationProgress.value >= 0.9f) {
-                            state.onTap(it, size.toSize()) 
+                            val paddingLeft = graphPadding.calculateLeftPadding(layoutDirection).toPx()
+                            val paddingTop = graphPadding.calculateTopPadding().toPx()
+                            val paddingRight = graphPadding.calculateRightPadding(layoutDirection).toPx()
+                            val paddingBottom = graphPadding.calculateBottomPadding().toPx()
+                            
+                            val xWithPadding = it.x - paddingLeft
+                            val yWithPadding = it.y - paddingTop
+                            
+                            val graphWidth = size.width.toFloat() - paddingLeft - paddingRight
+                            val graphHeight = size.height.toFloat() - paddingTop - paddingBottom
+                            
+                            state.onTap(Offset(xWithPadding, yWithPadding), Size(graphWidth, graphHeight)) 
                         }
                     }
                 )
             }
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, pan, zoom, _ ->
-                    state.onTransform(centroid, pan, zoom, size.toSize())
+                    val paddingLeft = graphPadding.calculateLeftPadding(layoutDirection).toPx()
+                    val paddingTop = graphPadding.calculateTopPadding().toPx()
+                    val paddingRight = graphPadding.calculateRightPadding(layoutDirection).toPx()
+                    val paddingBottom = graphPadding.calculateBottomPadding().toPx()
+                    
+                    val centroidWithPadding = Offset(
+                        centroid.x - paddingLeft,
+                        centroid.y - paddingTop
+                    )
+                    
+                    val graphWidth = size.width.toFloat() - paddingLeft - paddingRight
+                    val graphHeight = size.height.toFloat() - paddingTop - paddingBottom
+                    
+                    state.onTransform(centroidWithPadding, pan, zoom, Size(graphWidth, graphHeight))
                 }
             }
+            .padding(graphPadding)
     ) {
         val strokeWidthPx = strokeWidth.toPx()
         val allPointsRadiusPx = pointRadius.toPx()
@@ -270,7 +295,7 @@ fun SimpleLineGraph(
                             drawCircle(Color.White, selectedPointInnerRadiusPx, selectedOffset)
 
                             val labelText = labels.getOrElse(index) { "" }
-                            val tooltipText = tooltipFormatter(selectedValue, labelText)
+                            val tooltipText = tooltipFormatter(selectedValue, labelText, index)
 
                             textPaint.getTextBounds(tooltipText, 0, tooltipText.length, bounds)
 
@@ -368,7 +393,7 @@ class SimpleLineGraphState(
             val closestIndex = (xInData / spacing).roundToInt().coerceIn(dataPoints.indices)
             val pointXOnScreen = closestIndex * spacing + panOffset.value
 
-            if (abs(tapOffset.x - pointXOnScreen) < spacing / 2 + 20) {
+            if (abs(tapOffset.x - pointXOnScreen) < spacing / 2 + 40) {
                 if (selectedPointIndex != closestIndex) {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     selectedPointIndex = closestIndex

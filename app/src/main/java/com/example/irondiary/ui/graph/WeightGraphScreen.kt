@@ -187,7 +187,13 @@ fun WeightGraph(weightData: List<DailyLog>) {
     val validWeightData = remember(weightData) {
         weightData
             .filter { it.weight != null && it.weight > 0 }
-            .sortedBy { it.date }
+            .sortedBy { 
+                try {
+                    java.time.LocalDate.parse(it.date, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                } catch (e: Exception) {
+                    java.time.LocalDate.MIN
+                }
+            }
     }
 
     if (validWeightData.size < 2) {
@@ -244,9 +250,8 @@ fun WeightGraph(weightData: List<DailyLog>) {
             dataPoints = weightValues,
             labels = dateLabels,
             modifier = Modifier.fillMaxSize(),
-            tooltipFormatter = { value, label -> 
-                val index = weightValues.indexOf(value)
-                val fullDate = if (index != -1) tooltipLabels[index] else label
+            tooltipFormatter = { value, label, index -> 
+                val fullDate = tooltipLabels.getOrElse(index) { label }
                 "${String.format("%.1f", value)} kgs on $fullDate" 
             },
             fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
