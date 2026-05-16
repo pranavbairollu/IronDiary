@@ -99,7 +99,8 @@ fun CalendarScreen() {
             .padding(horizontal = 16.dp)
     ) {
             Spacer(modifier = Modifier.height(8.dp))
-            GymStreakHeader(streak = gymStreak, totalWorkouts = totalWorkouts)
+            val bestStreak by mainViewModel.bestStreak.collectAsState()
+            GymStreakHeader(streak = gymStreak, bestStreak = bestStreak, totalWorkouts = totalWorkouts)
             Spacer(modifier = Modifier.height(16.dp))
             
             CalendarHeader(
@@ -276,7 +277,7 @@ fun DayLabels() {
 }
 
 @Composable
-fun GymStreakHeader(streak: Int, totalWorkouts: Int) {
+fun GymStreakHeader(streak: Int, bestStreak: Int, totalWorkouts: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -296,15 +297,15 @@ fun GymStreakHeader(streak: Int, totalWorkouts: Int) {
                     Icons.Default.LocalFireDepartment,
                     contentDescription = null,
                     tint = Color(0xFFFF5722),
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(28.dp)
                 )
                 Text(
                     text = "$streak Days",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Current Streak",
+                    text = "Current",
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -313,18 +314,38 @@ fun GymStreakHeader(streak: Int, totalWorkouts: Int) {
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    Icons.Default.FitnessCenter,
+                    Icons.Default.EmojiEvents,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
+                    tint = Color(0xFFFFD700), // Gold for Best Streak
+                    modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "$totalWorkouts",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = "$bestStreak Days",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Total Sessions",
+                    text = "Best Ever",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            VerticalDivider(modifier = Modifier.height(40.dp))
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.FitnessCenter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "$totalWorkouts",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Total",
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -346,7 +367,6 @@ fun CalendarDay(
 ) {
     val haptic = LocalHapticFeedback.current
     
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
     val backgroundBrush = if (attendedGym) {
         Brush.radialGradient(
             colors = listOf(
@@ -413,6 +433,29 @@ fun CalendarDay(
             fontWeight = if (date == LocalDate.now() || isSelected) FontWeight.Bold else FontWeight.Normal,
             fontSize = 16.sp
         )
+
+        // Sync Status Dot
+        if (syncState != com.example.irondiary.data.local.SyncState.SYNCED) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 6.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when (syncState) {
+                                com.example.irondiary.data.local.SyncState.PENDING -> Color(0xFFFFC107) // Amber
+                                com.example.irondiary.data.local.SyncState.FAILED -> MaterialTheme.colorScheme.error
+                                else -> Color.Transparent
+                            }
+                        )
+                )
+            }
+        }
     }
 }
 
@@ -557,7 +600,7 @@ fun DailyInsightCard(
                 var isExpanded by rememberSaveable { mutableStateOf(false) }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text(
-                    text = log.notes!!,
+                    text = log.notes,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = if (isExpanded) Int.MAX_VALUE else 2,
                     overflow = if (isExpanded) androidx.compose.ui.text.style.TextOverflow.Visible else androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -566,7 +609,7 @@ fun DailyInsightCard(
                         onLongClick = {} // Avoid conflict with parent if any
                     )
                 )
-                if (log.notes!!.length > 100) {
+                if (log.notes.length > 100) {
                     Text(
                         text = if (isExpanded) "Show Less" else "Show More",
                         style = MaterialTheme.typography.labelSmall,
@@ -625,7 +668,7 @@ fun DailyLogBottomSheet(
     
     val isWeightValid = remember(weight) {
         if (weight.isEmpty()) true
-        else weight.toFloatOrNull()?.let { it > 0 && it <= 500 } ?: false
+        else weight.replace(',', '.').toFloatOrNull()?.let { it > 0 && it <= 500 } ?: false
     }
     
     val isNotesValid = notes.length <= 2000
@@ -699,7 +742,7 @@ fun DailyLogBottomSheet(
                         onSave(log.copy(
                             attendedGym = attendedGym,
                             isRestDay = isRestDay,
-                            weight = weight.toFloatOrNull(),
+                            weight = weight.replace(',', '.').toFloatOrNull(),
                             notes = notes.trim().takeIf { it.isNotBlank() }
                         ))
                     }

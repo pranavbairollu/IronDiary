@@ -247,7 +247,7 @@ class MainViewModel(
     }
 
     fun saveDailyLog(log: DailyLog, immediate: Boolean = false) {
-        val userId = auth.currentUser?.uid ?: return
+        if (auth.currentUser == null) return
         
         // Validation: Ensure weight is within a realistic range and notes aren't too long
         val weight = log.weight
@@ -650,7 +650,7 @@ class MainViewModel(
         }
     }
 
-    fun toggleDailyReminder(enabled: Boolean, context: Context) {
+    fun toggleDailyReminder(enabled: Boolean) {
         // Deprecated: Moving to per-task high-priority reminders.
         sharedPreferences.edit().putBoolean("daily_reminders_enabled", enabled).apply()
         _isDailyReminderEnabled.value = enabled

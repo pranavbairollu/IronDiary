@@ -200,7 +200,11 @@ object IronIntelligenceEngine {
         }
         
         // 2. Fallback to the first match if no high-confidence gym match found
-        return processQuery(matches[0], bundle)
+        return if (matches.isNotEmpty()) {
+            processQuery(matches[0], bundle)
+        } else {
+            IntelligenceResponse("I didn't catch that. Could you repeat it?")
+        }
     }
 
     private fun match(q: String, vararg keywords: String): Boolean {
@@ -357,17 +361,17 @@ object IronIntelligenceEngine {
         exerciseToMuscleMap.keys.forEach { exercise ->
             val records = logs.flatMap { log ->
                 val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
-                if (notes.contains(exercise)) {
-                    // Hardening: Find ALL matches in the note, not just the first one
-                    weightRegex.findAll(notes).map { match ->
+                val lines = notes.split("\n")
+                
+                lines.filter { it.contains(exercise) }.flatMap { line ->
+                    weightRegex.findAll(line).map { match ->
                         val weightValue = match.groupValues[1].toDouble()
                         val unit = match.groupValues[2].lowercase()
-                        // Normalize for comparison but keep original for display
                         val normalizedKg = if (unit == "lbs") weightValue * 0.453592 else weightValue
                         Triple(weightValue, unit, log.date) to normalizedKg
                     }.toList()
-                } else emptyList()
-            }.sortedByDescending { it.second } // Sort by normalized weight
+                }
+            }.sortedByDescending { it.second }
 
             if (records.isNotEmpty()) {
                 val (recordData, _) = records.first()
@@ -463,7 +467,7 @@ object IronIntelligenceEngine {
         val targetWeight = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
         
         return if (targetWeight != null) {
-            val currentWeight = last.weight!!
+            val currentWeight = last.weight ?: 0f // Keep safety but compiler says it's not null
             val remaining = targetWeight - currentWeight
             
             if (Math.abs(dailyDelta) < 0.001) {
@@ -525,14 +529,16 @@ object IronIntelligenceEngine {
         
         val records = logs.flatMap { log ->
             val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
-            if (notes.contains(exercise)) {
-                weightRegex.findAll(notes).map { match ->
+            val lines = notes.split("\n")
+            
+            lines.filter { it.contains(exercise) }.flatMap { line ->
+                weightRegex.findAll(line).map { match ->
                     val weightValue = match.groupValues[1].toDouble()
                     val unit = match.groupValues[2].lowercase()
                     val normalizedKg = if (unit == "lbs") weightValue * 0.453592 else weightValue
                     Triple(weightValue, unit, log.date) to normalizedKg
                 }.toList()
-            } else emptyList()
+            }
         }.sortedByDescending { it.second }
 
         return if (records.isNotEmpty()) {
