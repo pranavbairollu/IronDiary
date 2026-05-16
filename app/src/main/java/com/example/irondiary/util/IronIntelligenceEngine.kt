@@ -46,7 +46,7 @@ object IronIntelligenceEngine {
             
             // Check for "Goal: 90kg" in notes
             if (n.contains("goal") || n.contains("target")) {
-                val target = n.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
+                val target = n.replace(',', '.').split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
                 if (target != null) return if (target > lastWeight) GoalType.GAIN else GoalType.LOSS
             }
         }
@@ -363,7 +363,11 @@ object IronIntelligenceEngine {
                 val notes = log.notes?.lowercase(Locale.getDefault()) ?: ""
                 val lines = notes.split("\n")
                 
-                lines.filter { it.contains(exercise) }.flatMap { line ->
+                lines.filter { 
+                    // Word-bounded match for short exercise names to avoid false positives (e.g. "Row" vs "Rowing")
+                    if (exercise.length <= 4) Regex("\\b$exercise\\b").containsMatchIn(it)
+                    else it.contains(exercise) 
+                }.flatMap { line ->
                     weightRegex.findAll(line).map { match ->
                         val weightValue = match.groupValues[1].toDouble()
                         val unit = match.groupValues[2].lowercase()
@@ -464,12 +468,16 @@ object IronIntelligenceEngine {
         val weeklyRate = dailyDelta * 7
 
         // Extract a number from the query as the target weight
-        val targetWeight = query.split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
+        val targetWeight = query.replace(',', '.').split(Regex("[^0-9.]")).mapNotNull { it.toFloatOrNull() }.firstOrNull()
         
         return if (targetWeight != null) {
             val currentWeight = last.weight ?: 0f // Keep safety but compiler says it's not null
             val remaining = targetWeight - currentWeight
             
+            if (Math.abs(remaining) < 0.1f) {
+                return "You're already at your goal! Current weight: $currentWeight kg."
+            }
+
             if (Math.abs(dailyDelta) < 0.001) {
                 return "Your weight has been very stable lately. At this rate, it's hard to predict when you'll reach $targetWeight kg!"
             }
@@ -478,8 +486,6 @@ object IronIntelligenceEngine {
                 val daysToGoal = Math.round((remaining / dailyDelta).toDouble())
                 val goalDate = LocalDate.now().plusDays(daysToGoal)
                 "At your current rate of ${String.format("%.1f", weeklyRate)} kg/week, you'll reach $targetWeight kg in about $daysToGoal days (${goalDate.format(DateTimeFormatter.ofPattern("MMM dd"))})."
-            } else if (Math.abs(remaining) < 0.1f) {
-                "You're already at your goal! Current weight: $currentWeight kg."
             } else {
                 "Based on your recent trend (${String.format("%.1f", weeklyRate)} kg/week), you are currently moving ${if (dailyDelta > 0) "up" else "down"}, which is away from your goal of $targetWeight kg."
             }
