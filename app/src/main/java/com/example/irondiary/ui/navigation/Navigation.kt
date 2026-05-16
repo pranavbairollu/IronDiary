@@ -59,7 +59,6 @@ import com.example.irondiary.viewmodel.AuthViewModel
 import com.example.irondiary.viewmodel.AuthViewModelFactory
 import com.example.irondiary.viewmodel.MainViewModel
 import com.example.irondiary.viewmodel.MainViewModelFactory
-import com.example.irondiary.ui.components.SettingsDialog
 import com.example.irondiary.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
@@ -114,7 +113,6 @@ fun TopLevelNav() {
     var showLogChoiceDialog by rememberSaveable { mutableStateOf(false) }
     var showLogStudySessionDialog by rememberSaveable { mutableStateOf(false) }
     var showLogTaskDialog by rememberSaveable { mutableStateOf(false) }
-    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     val application = LocalContext.current.applicationContext as Application
@@ -199,12 +197,6 @@ fun TopLevelNav() {
         )
     }
 
-    if (showSettingsDialog) {
-        SettingsDialog(
-            mainViewModel = mainViewModel,
-            onDismiss = { showSettingsDialog = false }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -226,9 +218,6 @@ fun TopLevelNav() {
                                 Icon(Icons.Default.Download, contentDescription = "Export to PDF")
                             }
                         }
-                    }
-                    androidx.compose.material3.IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 }
             )
