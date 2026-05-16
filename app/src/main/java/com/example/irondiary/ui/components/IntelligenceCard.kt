@@ -29,8 +29,8 @@ fun IntelligenceCard(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1E1E1E).copy(alpha = 0.8f),
-                        Color(0xFF121212).copy(alpha = 0.9f)
+                        MaterialTheme.colorScheme.secondaryContainer,
+                        MaterialTheme.colorScheme.surface
                     )
                 )
             )
@@ -38,7 +38,7 @@ fun IntelligenceCard(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.2f),
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                         Color.Transparent
                     )
                 ),
@@ -54,13 +54,13 @@ fun IntelligenceCard(
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = Color(0xFF64FFDA), // Mint green for intelligence
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "IRON INSIGHT",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF64FFDA),
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
@@ -71,7 +71,7 @@ fun IntelligenceCard(
             Text(
                 text = insight,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
                 lineHeight = 24.sp
             )
             
@@ -80,13 +80,13 @@ fun IntelligenceCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.05f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = "AI Coach Active",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.4f)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                 )
             }
         }
