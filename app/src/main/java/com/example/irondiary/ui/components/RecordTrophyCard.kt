@@ -31,7 +31,7 @@ fun RecordTrophyCard(
     val showGlow = isHeavy || isRecent
     
     Box(modifier = modifier) {
-        // Dynamic Glow Effect
+        // Dynamic Glow Effect (Subtle for Light Theme)
         if (showGlow) {
             Box(
                 modifier = Modifier
@@ -41,7 +41,7 @@ fun RecordTrophyCard(
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                (if (isHeavy) Color(0xFFFFD700) else Color(0xFF64FFDA)).copy(alpha = 0.15f),
+                                (if (isHeavy) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary).copy(alpha = 0.08f),
                                 Color.Transparent
                             )
                         ),
@@ -57,15 +57,21 @@ fun RecordTrophyCard(
                 .border(
                     width = 1.dp,
                     brush = when {
-                        isHeavy -> Brush.linearGradient(listOf(Color(0xFFFFD700).copy(alpha = 0.3f), Color.Transparent))
-                        isRecent -> Brush.linearGradient(listOf(Color(0xFF64FFDA).copy(alpha = 0.3f), Color.Transparent))
-                        else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent))
+                        isHeavy -> Brush.linearGradient(listOf(Color(0xFFFFD700).copy(alpha = 0.4f), Color.Transparent))
+                        isRecent -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), Color.Transparent))
+                        else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), Color.Transparent))
                     },
                     shape = RoundedCornerShape(24.dp)
                 ),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161616)),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isHeavy) 12.dp else 4.dp)
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    isHeavy -> Color(0xFFFFD700).copy(alpha = 0.05f)
+                    isRecent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isHeavy) 8.dp else 2.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -82,9 +88,9 @@ fun RecordTrophyCard(
                             Brush.radialGradient(
                                 colors = listOf(
                                     when {
-                                        isHeavy -> Color(0xFFFFD700).copy(alpha = 0.3f)
-                                        isRecent -> Color(0xFF64FFDA).copy(alpha = 0.3f)
-                                        else -> Color.White.copy(alpha = 0.05f)
+                                        isHeavy -> Color(0xFFFFD700).copy(alpha = 0.2f)
+                                        isRecent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
                                     },
                                     Color.Transparent
                                 )
@@ -96,9 +102,9 @@ fun RecordTrophyCard(
                         imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
                         tint = when {
-                            isHeavy -> Color(0xFFFFD700)
-                            isRecent -> Color(0xFF64FFDA)
-                            else -> Color.White.copy(alpha = 0.4f)
+                            isHeavy -> Color(0xFFFFA000) // Deep Gold
+                            isRecent -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                         },
                         modifier = Modifier.size(32.dp)
                     )
@@ -109,7 +115,7 @@ fun RecordTrophyCard(
                 Text(
                     text = exercise.split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } },
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -121,7 +127,7 @@ fun RecordTrophyCard(
                 Text(
                     text = "$weight $unit",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Black
                 )
                 
@@ -130,7 +136,7 @@ fun RecordTrophyCard(
                 Text(
                     text = date,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.3f)
+                    color = MaterialTheme.colorScheme.outline
                 )
             }
         }
