@@ -9,8 +9,11 @@
 - **✅ Smart Task Management**: Organize your daily goals with instant local feedback and deferred cloud sync.
 - **📅 Interactive Calendar & Daily Logs**: Track gym attendance, weight, and personal notes.
 - **📊 Academic Analytics**: Visualize study patterns with interactive, zoomable bar graphs.
+- **🧠 Iron Intelligence Engine**: Advanced Regex keyword detection, multi-intent resolution, and proactive workout nudges.
+- **🎙️ Iron Voice**: Seamless voice interaction integration for frictionless data entry and task management.
+- **🏆 Training Director & Hall of Fame**: Automatically track all-time personal records with premium `RecordTrophyCard` UI components.
 - **🔄 Bulletproof Sync**: Robust offline-first architecture using Room as the Single Source of Truth (SSOT).
-- **🌓 Modern UI**: Fully responsive Jetpack Compose interface with Material 3 theming and consistent layouts.
+- **🌓 Premium Design System**: Fully responsive Jetpack Compose interface featuring a Mint & Charcoal palette, dynamic transitions, and glassmorphism components.
 
 ---
 

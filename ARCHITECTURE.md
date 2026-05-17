@@ -29,7 +29,13 @@ The UI is built with **Jetpack Compose**, focusing on:
 - **Unidirectional Data Flow**: State flows from the Repository -> ViewModel -> UI, while events flow the opposite way.
 - **Resource Management**: Using `Flow.collectAsState()` and `viewModelScope` to ensure memory leaks are avoided and coroutines are cancelled properly.
 
-## 5. Testing Strategy
+## 5. Intelligent Reasoning & AI Integration
+IronDiary leverages a custom **Iron Intelligence Engine** for natural language processing and proactive insights:
+- **Regex Keyword Detection**: Fast, robust local parsing of user inputs to deduce intent (e.g., workouts, academic tasks).
+- **Multi-Intent Resolution**: Capable of breaking down complex sentences into distinct actionable entities.
+- **Correlation Engine**: Correlates different data points (e.g., sleep, workout intensity, study hours) to surface proactive nudges.
+
+## 6. Testing Strategy
 We prioritize confidence over coverage:
 - **Repository Pattern**: Extracted all data logic into a clean Repository layer, making ViewModels easily testable.
 - **MockK Integration**: Used for reliable mocking of repositories and coroutine-heavy flows.

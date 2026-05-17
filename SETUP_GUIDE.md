@@ -36,5 +36,6 @@ We use JUnit 4 and MockK for unit testing.
 ## 🧩 Key Project Modules
 - `com.example.irondiary.data`: Repository, Room Entities, DAOs, and Mappers.
 - `com.example.irondiary.viewmodel`: Main business logic and UI state management.
-- `com.example.irondiary.ui`: Jetpack Compose screens and components.
+- `com.example.irondiary.ui`: Jetpack Compose screens, Studio Design System, and Glassmorphism components.
 - `com.example.irondiary.worker`: WorkManager synchronization logic.
+- `com.example.irondiary.util`: Iron Intelligence Engine, Voice Interaction, Regex parsing, and core utilities.
