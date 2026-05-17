@@ -1,5 +1,10 @@
 # IronDiary 🛡️
 
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.0-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![Platform](https://img.shields.io/badge/Platform-Android-green.svg?logo=android)](https://www.android.com)
+[![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg?logo=android)](https://android-arsenal.com/api?level=24)
+![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)
+
 **IronDiary** is a robust, offline-first productivity and academic tracking Android application. Built with modern Android architecture, it ensures your data is always available, even without an internet connection, while maintaining seamless cloud synchronization.
 
 ---
@@ -80,6 +85,13 @@ Implementation of a bidirectional sync engine that:
 
 ---
 
+## 📄 License
+
+**All Rights Reserved.**
+
+This repository is provided strictly for portfolio demonstration purposes. No permission is granted to use, copy, modify, or distribute this code.
+
+---
 
 ## 👤 Author
 **Pranav Bairollu**
