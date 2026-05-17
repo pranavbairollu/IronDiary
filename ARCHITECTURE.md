@@ -24,7 +24,8 @@ IronDiary uses a **Timestamp-Based Last-Write-Wins** strategy with a protective 
 - If the local version is newer, it overwrites the remote version.
 
 ## 4. UI Rendering & Performance
-The UI is built with **Jetpack Compose**, focusing on:
+The UI is built with **Jetpack Compose** employing a custom **Studio Design System**:
+- **Premium Aesthetics**: Enforces a consistent Mint & Charcoal palette, dynamic palette transitions, and glassmorphism styling across the application.
 - **Stable Keys**: Every list item uses `key(id)` to prevent unnecessary recompositions and enable efficient animations.
 - **Unidirectional Data Flow**: State flows from the Repository -> ViewModel -> UI, while events flow the opposite way.
 - **Resource Management**: Using `Flow.collectAsState()` and `viewModelScope` to ensure memory leaks are avoided and coroutines are cancelled properly.

@@ -63,6 +63,14 @@ Implementation of a bidirectional sync engine that:
 - Comprehensive test suite using **MockK** and **Coroutines Test**.
 - Isolated repository mocking strategy for robust ViewModel validation.
 
+### 4. Applied AI & Voice Integration
+- Custom **Iron Intelligence Engine** utilizing robust local Regex parsing for intent resolution and proactive notifications.
+- Seamless **Voice-to-Task** pipeline to capture fitness and academic data frictionlessly.
+
+### 5. Premium Design System
+- Built a cohesive **Mint & Charcoal** palette with fluid animations and custom glassmorphism elements.
+- Implemented responsive, dynamic UI components showcasing the **Training Director** and **Hall of Fame** dashboards.
+
 ---
 
 ## 📖 Further Documentation
