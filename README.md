@@ -33,12 +33,15 @@ IronDiary is built on a high-performance, offline-first foundation:
 ```mermaid
 graph TD
     UI["Jetpack Compose UI"] --> VM["MainViewModel"]
+    Voice["Iron Voice"] --> Engine["Iron Intelligence Engine"]
+    Engine --> VM
     VM --> Repo["IronDiaryRepository"]
     Repo --> Room["Room Database (SSOT)"]
     Room --> Sync["SyncWorker (WorkManager)"]
     Sync <--> Firestore["Firebase Firestore"]
     
     style Room fill:#f9f,stroke:#333,stroke-width:4px
+    style Engine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
 ```
 
 ---
